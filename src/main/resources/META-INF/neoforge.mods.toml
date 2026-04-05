@@ -1,0 +1,33 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "GNU LESSER GENERAL PUBLIC LICENSE"
+issueTrackerURL = "https://github.com/Alex-the-666/DomesticationInnovation/issues"
+
+[[mods]]
+modId = "domesticationinnovation"
+version = "${file.jarVersion}"
+displayName = "Domestication Innovation"
+displayURL = "https://www.curseforge.com/minecraft/mc-mods/domestication-innovation"
+authors = "Alexthe668, FallenReaper, Yosh"
+description = '''Vastly improves upon and compliments tameable mobs, both from vanilla and other mods. Updated for NeoForge 1.21.1 with ATM10 integration.'''
+logoFile = "domesticationinnovation.png"
+
+[modproperties.domesticationinnovation]
+    catalogueItemIcon = "domesticationinnovation:collar_tag"
+
+[[dependencies.domesticationinnovation]]
+    modId = "neoforge"
+    type = "required"
+    versionRange = "[21.1,)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.domesticationinnovation]]
+    modId = "minecraft"
+    type = "required"
+    versionRange = "[1.21.1,1.22)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[mixins]]
+config = "domesticationinnovation.mixins.json"

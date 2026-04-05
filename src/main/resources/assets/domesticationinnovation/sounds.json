@@ -1,0 +1,156 @@
+{
+  "collar_tag": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:collar_tag_0"
+      },
+      {
+        "name": "domesticationinnovation:collar_tag_1"
+      },
+      {
+        "name": "domesticationinnovation:collar_tag_2"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.collar_tag"
+  },
+  "magnet_loop": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:magnet_loop"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.magnet_loop"
+  },
+  "chain_lightning": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:chain_lightning_0"
+      },
+      {
+        "name": "domesticationinnovation:chain_lightning_1"
+      },
+      {
+        "name": "domesticationinnovation:chain_lightning_2"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.chain_lightning"
+  },
+  "giant_bubble_inflate": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:giant_bubble_inflate_0"
+      },
+      {
+        "name": "domesticationinnovation:giant_bubble_inflate_1"
+      },
+      {
+        "name": "domesticationinnovation:giant_bubble_inflate_2"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.giant_bubble_inflate"
+  },
+  "giant_bubble_pop": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:giant_bubble_pop_0"
+      },
+      {
+        "name": "domesticationinnovation:giant_bubble_pop_1"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.giant_bubble_pop"
+  },
+  "pet_bed_use": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:pet_bed_use_0"
+      },
+      {
+        "name": "domesticationinnovation:pet_bed_use_1"
+      },
+      {
+        "name": "domesticationinnovation:pet_bed_use_2"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.pet_bed_use"
+  },
+  "drum": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:drum_0"
+      },
+      {
+        "name": "domesticationinnovation:drum_1"
+      },
+      {
+        "name": "domesticationinnovation:drum_2"
+      },
+      {
+        "name": "domesticationinnovation:drum_3"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.drum"
+  },
+  "psychic_wall": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:psychic_wall_0"
+      },
+      {
+        "name": "domesticationinnovation:psychic_wall_1"
+      },
+      {
+        "name": "domesticationinnovation:psychic_wall_2"
+      },
+      {
+        "name": "domesticationinnovation:psychic_wall_3"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.psychic_wall"
+  },
+  "psychic_wall_deflect": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "domesticationinnovation:psychic_wall_deflect_0"
+      },
+      {
+        "name": "domesticationinnovation:psychic_wall_deflect_1"
+      },
+      {
+        "name": "domesticationinnovation:psychic_wall_deflect_2"
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.psychic_wall_deflect"
+  },
+  "blazing_protection": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "mob/blaze/hit1",
+        "pitch": 1.5
+      },
+      {
+        "name": "mob/blaze/hit2",
+        "pitch": 1.5
+      },
+      {
+        "name": "mob/blaze/hit3",
+        "pitch": 1.5
+      },
+      {
+        "name": "mob/blaze/hit4",
+        "pitch": 1.5
+      }
+    ],
+    "subtitle": "domesticationinnovation.sound.subtitle.blazing_protection"
+  }
+}

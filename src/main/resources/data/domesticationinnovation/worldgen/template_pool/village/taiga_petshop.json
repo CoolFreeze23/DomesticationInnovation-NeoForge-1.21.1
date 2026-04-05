@@ -1,0 +1,15 @@
+{
+  "name": "domesticationinnovation:village/taiga_petshop",
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 17,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "domesticationinnovation:taiga_petshop",
+        "processors": "minecraft:empty",
+        "projection": "rigid"
+      }
+    }
+  ]
+}

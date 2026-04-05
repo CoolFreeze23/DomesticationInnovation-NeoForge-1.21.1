@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.fireproof"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "weight": 5,
+  "max_level": 1,
+  "min_cost": {
+    "base": 7,
+    "per_level_above_first": 7
+  },
+  "max_cost": {
+    "base": 12,
+    "per_level_above_first": 7
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}

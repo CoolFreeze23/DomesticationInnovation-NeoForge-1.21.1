@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.total_recall"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "weight": 5,
+  "max_level": 1,
+  "min_cost": {
+    "base": 3,
+    "per_level_above_first": 3
+  },
+  "max_cost": {
+    "base": 8,
+    "per_level_above_first": 3
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}
