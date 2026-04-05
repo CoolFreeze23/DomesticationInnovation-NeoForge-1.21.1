@@ -3,13 +3,16 @@ package com.github.alexthe668.domesticationinnovation.server.misc;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.mojang.datafixers.util.Pair;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElementType;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorList;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.lang.reflect.Field;
@@ -40,12 +43,16 @@ public class DIVillagePieceRegistry {
         Registry<StructureTemplatePool> poolRegistry =
                 server.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL);
 
+        Holder<StructureProcessorList> emptyProcessors = server.registryAccess()
+                .registryOrThrow(Registries.PROCESSOR_LIST)
+                .getHolderOrThrow(ResourceKey.create(
+                        Registries.PROCESSOR_LIST, ResourceLocation.withDefaultNamespace("empty")));
+
         for (String[] entry : VILLAGE_POOLS) {
             ResourceLocation poolId = ResourceLocation.parse(entry[0]);
             poolRegistry.getOptional(poolId).ifPresent(pool -> {
-                StructurePoolElement element = StructurePoolElement
-                        .single(entry[1])
-                        .apply(StructureTemplatePool.Projection.RIGID);
+                PetshopStructurePoolElement element = new PetshopStructurePoolElement(
+                        ResourceLocation.parse(entry[1]), emptyProcessors);
                 try {
                     Field templatesField = StructureTemplatePool.class.getDeclaredField("templates");
                     templatesField.setAccessible(true);
