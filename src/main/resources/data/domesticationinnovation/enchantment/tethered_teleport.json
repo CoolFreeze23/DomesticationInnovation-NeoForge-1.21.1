@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.tethered_teleport"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "weight": 10,
+  "max_level": 1,
+  "min_cost": {
+    "base": 4,
+    "per_level_above_first": 4
+  },
+  "max_cost": {
+    "base": 9,
+    "per_level_above_first": 4
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}

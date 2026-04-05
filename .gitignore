@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+.tools/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# NeoForge/Minecraft runs
+run/
+runs/
+logs/
+
+# Migration notes (dev only)
+MIGRATION_GUIDE.md

@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.defusal"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "weight": 5,
+  "max_level": 3,
+  "min_cost": {
+    "base": 14,
+    "per_level_above_first": 14
+  },
+  "max_cost": {
+    "base": 19,
+    "per_level_above_first": 14
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}

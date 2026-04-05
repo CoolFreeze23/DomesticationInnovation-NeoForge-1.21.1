@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.charisma"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "weight": 1,
+  "max_level": 3,
+  "min_cost": {
+    "base": 7,
+    "per_level_above_first": 7
+  },
+  "max_cost": {
+    "base": 12,
+    "per_level_above_first": 7
+  },
+  "anvil_cost": 8,
+  "slots": [
+    "mainhand"
+  ]
+}

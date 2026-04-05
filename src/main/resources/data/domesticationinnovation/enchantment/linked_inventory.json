@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.linked_inventory"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "weight": 10,
+  "max_level": 1,
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 5
+  },
+  "max_cost": {
+    "base": 10,
+    "per_level_above_first": 5
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}
