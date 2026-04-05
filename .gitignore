@@ -19,6 +19,3 @@ Thumbs.db
 run/
 runs/
 logs/
-
-# Migration notes (dev only)
-MIGRATION_GUIDE.md
