@@ -130,7 +130,6 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
             case "petshop_cage_0"://wolf, rabbit or cat
                 spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1 + random.nextInt(2), random, cage0Mobs);
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 4);
-                spawnAnimalTamer(levelAccessor, structureBlockInfo.pos().above(), random);
                 break;
             case "petshop_cage_1"://desert terrarium
                 spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 2 + random.nextInt(2), random, cage1Mobs);
@@ -142,6 +141,10 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
                 break;
             case "petshop_cage_3"://parrot
                 spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1, random, cage3Mobs);
+                levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 2);
+                break;
+            case "petshop_villager":
+                spawnAnimalTamer(levelAccessor, structureBlockInfo.pos(), random);
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 2);
                 break;
         }
