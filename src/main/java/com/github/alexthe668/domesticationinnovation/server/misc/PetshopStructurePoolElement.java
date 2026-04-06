@@ -10,6 +10,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.VillagerData;
+import net.minecraft.world.entity.npc.VillagerType;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.StructureManager;
@@ -26,6 +29,7 @@ import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.minecraft.world.level.levelgen.structure.templatesystem.*;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
+import com.github.alexthe668.domesticationinnovation.server.entity.DIVillagerRegistry;
 
 import java.util.List;
 
@@ -126,6 +130,7 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
             case "petshop_cage_0"://wolf, rabbit or cat
                 spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1 + random.nextInt(2), random, cage0Mobs);
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 4);
+                spawnAnimalTamer(levelAccessor, structureBlockInfo.pos().above(), random);
                 break;
             case "petshop_cage_1"://desert terrarium
                 spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 2 + random.nextInt(2), random, cage1Mobs);
@@ -159,6 +164,21 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
                     mob.finalizeSpawn(serverLevel, serverLevel.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.STRUCTURE, null);
                 }
                 serverLevel.addFreshEntityWithPassengers(entity);
+            }
+        }
+    }
+
+    private void spawnAnimalTamer(LevelAccessor accessor, BlockPos at, RandomSource random) {
+        if (accessor instanceof ServerLevelAccessor serverLevel) {
+            Villager villager = EntityType.VILLAGER.create(serverLevel.getLevel());
+            if (villager != null) {
+                villager.setPos(Vec3.atBottomCenterOf(at));
+                villager.setVillagerData(villager.getVillagerData()
+                        .setProfession(DIVillagerRegistry.ANIMAL_TAMER.get())
+                        .setLevel(2));
+                villager.setPersistenceRequired();
+                villager.finalizeSpawn(serverLevel, serverLevel.getCurrentDifficultyAt(villager.blockPosition()), MobSpawnType.STRUCTURE, null);
+                serverLevel.addFreshEntityWithPassengers(villager);
             }
         }
     }
