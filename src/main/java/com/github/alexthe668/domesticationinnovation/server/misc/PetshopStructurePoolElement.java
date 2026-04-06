@@ -12,10 +12,13 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.pools.LegacySinglePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElementType;
@@ -54,8 +57,27 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
     }
 
     @Override
+    public boolean place(StructureTemplateManager structureTemplateManager, WorldGenLevel worldGenLevel, StructureManager structureManager, ChunkGenerator chunkGenerator, BlockPos offset, BlockPos pos2, Rotation rotation, BoundingBox boundingBox, RandomSource random, LiquidSettings liquidSettings, boolean keepJigsaws) {
+        boolean result = super.place(structureTemplateManager, worldGenLevel, structureManager, chunkGenerator, offset, pos2, rotation, boundingBox, random, liquidSettings, keepJigsaws);
+        if (result) {
+            List<StructureTemplate.StructureBlockInfo> dataMarkers = this.getDataMarkers(structureTemplateManager, offset, rotation, true);
+            for (StructureTemplate.StructureBlockInfo info : dataMarkers) {
+                if (boundingBox.isInside(info.pos())) {
+                    this.handleDataMarker(worldGenLevel, info, offset, rotation, random, boundingBox);
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
     public void handleDataMarker(LevelAccessor levelAccessor, StructureTemplate.StructureBlockInfo structureBlockInfo, BlockPos pos, Rotation rotation, RandomSource random, BoundingBox box) {
+        if (structureBlockInfo.nbt() == null) {
+            DomesticationMod.LOGGER.warn("PetshopStructurePoolElement: data marker at {} has null NBT", structureBlockInfo.pos());
+            return;
+        }
         String contents = structureBlockInfo.nbt().getString("metadata");
+        DomesticationMod.LOGGER.info("PetshopStructurePoolElement: processing data marker '{}' at {}", contents, structureBlockInfo.pos());
         if(!initializedMobLists){
             fishtankMobs = getAllMatchingEntities(DITagRegistry.PETSTORE_FISHTANK).toArray(new EntityType[0]);
             cage0Mobs = getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_0).toArray(new EntityType[0]);
@@ -125,7 +147,7 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
     }
 
     public void spawnAnimalsAt(LevelAccessor accessor, BlockPos at, int count, RandomSource random, EntityType... types) {
-        if (types.length > 0 && count > 0 && accessor.getBlockState(at).getBlock() == Blocks.STRUCTURE_BLOCK && accessor instanceof ServerLevelAccessor serverLevel) {
+        if (types.length > 0 && count > 0 && accessor instanceof ServerLevelAccessor serverLevel) {
             for (int i = 0; i < count; i++) {
                 int index = types.length == 1 ? 0 : random.nextInt(types.length);
                 Entity entity = types[index].create(serverLevel.getLevel());
@@ -141,19 +163,12 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
         }
     }
 
-    protected StructurePlaceSettings getSettings(Rotation p_210421_, BoundingBox p_210422_, boolean p_210423_) {
-        StructurePlaceSettings structureplacesettings = new StructurePlaceSettings();
-        structureplacesettings.setBoundingBox(p_210422_);
-        structureplacesettings.setRotation(p_210421_);
-        structureplacesettings.setKnownShape(true);
-        structureplacesettings.setIgnoreEntities(false);
-        structureplacesettings.setFinalizeEntities(true);
-        if (!p_210423_) {
-            structureplacesettings.addProcessor(JigsawReplacementProcessor.INSTANCE);
-        }
-        this.processors.value().list().forEach(structureplacesettings::addProcessor);
-        this.getProjection().getProcessors().forEach(structureplacesettings::addProcessor);
-        return structureplacesettings;
+    @Override
+    protected StructurePlaceSettings getSettings(Rotation rotation, BoundingBox boundingBox, LiquidSettings liquidSettings, boolean keepJigsaws) {
+        StructurePlaceSettings settings = super.getSettings(rotation, boundingBox, liquidSettings, keepJigsaws);
+        settings.setIgnoreEntities(false);
+        settings.setFinalizeEntities(true);
+        return settings;
     }
 
     public StructurePoolElementType<?> getType() {

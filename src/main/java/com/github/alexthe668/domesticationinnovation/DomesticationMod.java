@@ -6,6 +6,7 @@ import com.github.alexthe668.domesticationinnovation.server.block.DIBlockRegistr
 import com.github.alexthe668.domesticationinnovation.server.block.DITileEntityRegistry;
 import com.github.alexthe668.domesticationinnovation.server.enchantment.DIEnchantmentKeys;
 import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
+import com.github.alexthe668.domesticationinnovation.server.misc.DIVillagePieceRegistry;
 import com.github.alexthe668.domesticationinnovation.server.entity.DIActivityRegistry;
 import com.github.alexthe668.domesticationinnovation.server.entity.DIEntityRegistry;
 import com.github.alexthe668.domesticationinnovation.server.entity.DIVillagerRegistry;
@@ -61,8 +62,8 @@ public class DomesticationMod {
         DICreativeTabRegistry.DEF_REG.register(modEventBus);
         DILootRegistry.DEF_REG.register(modEventBus);
         DIAttachments.DEF_REG.register(modEventBus);
+        DIVillagePieceRegistry.DEF_REG.register(modEventBus);
         // Note: Enchantments are now data-driven in 1.21.1 - see data/domesticationinnovation/enchantment/
-        // DIVillagePieceRegistry is handled in common setup
 
         NeoForge.EVENT_BUS.register(new CommonProxy());
 
