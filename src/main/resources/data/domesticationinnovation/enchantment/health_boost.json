@@ -3,6 +3,7 @@
     "translate": "enchantment.domesticationinnovation.health_boost"
   },
   "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/health_boost",
   "weight": 10,
   "max_level": 3,
   "min_cost": {
@@ -10,10 +11,10 @@
     "per_level_above_first": 5
   },
   "max_cost": {
-    "base": 10,
-    "per_level_above_first": 5
+    "base": 16,
+    "per_level_above_first": 10
   },
-  "anvil_cost": 2,
+  "anvil_cost": 1,
   "slots": [
     "mainhand"
   ]

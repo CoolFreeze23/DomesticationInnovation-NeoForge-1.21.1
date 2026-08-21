@@ -12,6 +12,7 @@ import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 
 
 import java.util.EnumSet;
@@ -128,12 +129,11 @@ public class FollowOwner2Goal extends Goal {
     }
 
     private boolean canTeleportTo(BlockPos pos) {
-        BlockState belowState = this.level.getBlockState(pos.below());
-        boolean isWalkable = !belowState.isAir();
         if (TameableUtils.hasEnchant(tamable, DIEnchantmentKeys.AMPHIBIOUS) && level.isWaterAt(pos)) {
             return true;
         }
-        if (!isWalkable) {
+        PathType pathType = WalkNodeEvaluator.getPathTypeStatic(this.tamable, pos.mutable());
+        if (pathType != PathType.WALKABLE) {
             return false;
         } else {
             BlockState blockstate = this.level.getBlockState(pos.below());

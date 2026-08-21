@@ -27,7 +27,7 @@
 
 ### Entity Data (Citadel Replacement)
 - `CitadelEntityData` → NeoForge `AttachmentType<CompoundTag>` via `DIAttachments.PET_DATA`
-- `Citadel.sendMSGToAll/Server` → automatic NeoForge attachment sync
+- `Citadel.sendMSGToAll/Server` → `DIPetDataSyncPacket` sent on mutation via `DINetworkRegistry.syncPetData` (attachments do not auto-sync); initial state reaches clients through the start-tracking handler
 - `IComandableMob` → absorbed into `ModifedToBeTameable` interface
 - `AdvancedEntityModel/AdvancedModelBox` → vanilla `EntityModel/ModelPart`
 - `LightningRender/LightningBoltData` → needs custom replacement (stubbed)

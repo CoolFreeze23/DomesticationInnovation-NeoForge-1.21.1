@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "LIL",
+    " L "
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:lantern"
+    },
+    "L": {
+      "tag": "c:ingots/iron"
+    }
+  },
+  "result": {
+    "id": "domesticationinnovation:wayward_lantern",
+    "count": 1
+  }
+}

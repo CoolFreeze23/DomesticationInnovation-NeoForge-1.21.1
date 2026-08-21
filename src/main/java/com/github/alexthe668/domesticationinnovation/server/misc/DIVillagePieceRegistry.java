@@ -17,6 +17,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public class DIVillagePieceRegistry {
@@ -43,37 +44,55 @@ public class DIVillagePieceRegistry {
         Registry<StructureTemplatePool> poolRegistry =
                 server.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL);
 
-        Holder<StructureProcessorList> emptyProcessors = server.registryAccess()
+        Optional<Holder.Reference<StructureProcessorList>> emptyProcessors = server.registryAccess()
                 .registryOrThrow(Registries.PROCESSOR_LIST)
-                .getHolderOrThrow(ResourceKey.create(
+                .getHolder(ResourceKey.create(
                         Registries.PROCESSOR_LIST, ResourceLocation.withDefaultNamespace("empty")));
+        if (emptyProcessors.isEmpty()) {
+            DomesticationMod.LOGGER.error("Processor list minecraft:empty is missing; petshops will not be added to villages");
+            return;
+        }
 
+        Field templatesField;
+        Field rawField;
+        try {
+            templatesField = StructureTemplatePool.class.getDeclaredField("templates");
+            templatesField.setAccessible(true);
+            rawField = StructureTemplatePool.class.getDeclaredField("rawTemplates");
+            rawField.setAccessible(true);
+        } catch (Exception e) {
+            DomesticationMod.LOGGER.error("Cannot access StructureTemplatePool fields; petshops will not be added to villages", e);
+            return;
+        }
+
+        int injected = 0;
         for (String[] entry : VILLAGE_POOLS) {
             ResourceLocation poolId = ResourceLocation.parse(entry[0]);
-            poolRegistry.getOptional(poolId).ifPresent(pool -> {
-                PetshopStructurePoolElement element = new PetshopStructurePoolElement(
-                        ResourceLocation.parse(entry[1]), emptyProcessors);
-                try {
-                    Field templatesField = StructureTemplatePool.class.getDeclaredField("templates");
-                    templatesField.setAccessible(true);
-                    ObjectArrayList<StructurePoolElement> templates =
-                            (ObjectArrayList<StructurePoolElement>) templatesField.get(pool);
-                    for (int i = 0; i < weight; i++) {
-                        templates.add(element);
-                    }
-
-                    Field rawField = StructureTemplatePool.class.getDeclaredField("rawTemplates");
-                    rawField.setAccessible(true);
-                    List<Pair<StructurePoolElement, Integer>> raw =
-                            (List<Pair<StructurePoolElement, Integer>>) rawField.get(pool);
-                    List<Pair<StructurePoolElement, Integer>> mutableRaw = new java.util.ArrayList<>(raw);
-                    mutableRaw.add(Pair.of(element, weight));
-                    rawField.set(pool, mutableRaw);
-                } catch (Exception e) {
-                    DomesticationMod.LOGGER.error("Failed to inject petshop into village pool {}", entry[0], e);
+            Optional<StructureTemplatePool> maybePool = poolRegistry.getOptional(poolId);
+            if (maybePool.isEmpty()) {
+                DomesticationMod.LOGGER.debug("Village pool {} is absent; skipping petshop injection", entry[0]);
+                continue;
+            }
+            StructureTemplatePool pool = maybePool.get();
+            PetshopStructurePoolElement element = new PetshopStructurePoolElement(
+                    ResourceLocation.parse(entry[1]), emptyProcessors.get());
+            try {
+                ObjectArrayList<StructurePoolElement> templates =
+                        (ObjectArrayList<StructurePoolElement>) templatesField.get(pool);
+                for (int i = 0; i < weight; i++) {
+                    templates.add(element);
                 }
-            });
+
+                List<Pair<StructurePoolElement, Integer>> raw =
+                        (List<Pair<StructurePoolElement, Integer>>) rawField.get(pool);
+                List<Pair<StructurePoolElement, Integer>> mutableRaw = new java.util.ArrayList<>(raw);
+                mutableRaw.add(Pair.of(element, weight));
+                rawField.set(pool, mutableRaw);
+                injected++;
+            } catch (Exception e) {
+                DomesticationMod.LOGGER.error("Failed to inject petshop into village pool {}", entry[0], e);
+            }
         }
-        DomesticationMod.LOGGER.info("Registered petshop village pieces with weight {}", weight);
+        DomesticationMod.LOGGER.info("Registered petshop village pieces in {} of {} pools with weight {}", injected, VILLAGE_POOLS.length, weight);
     }
 }

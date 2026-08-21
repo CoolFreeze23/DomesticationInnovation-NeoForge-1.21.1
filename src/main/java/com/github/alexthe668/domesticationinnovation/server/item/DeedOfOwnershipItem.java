@@ -19,12 +19,11 @@ public class DeedOfOwnershipItem extends Item {
     }
 
     public static boolean isBound(ItemStack stack) {
-        CompoundTag tag = getCustomTag(stack);
-        return tag.getBoolean("HasBoundEntity");
+        return getReadOnlyTag(stack).getBoolean("HasBoundEntity");
     }
 
     public static UUID getBoundEntity(ItemStack stack) {
-        CompoundTag tag = getCustomTag(stack);
+        CompoundTag tag = getReadOnlyTag(stack);
         return tag.hasUUID("BoundEntity") ? tag.getUUID("BoundEntity") : null;
     }
 
@@ -40,9 +39,12 @@ public class DeedOfOwnershipItem extends Item {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(new CompoundTag()));
     }
 
-    private static CompoundTag getCustomTag(ItemStack stack) {
-        CustomData data = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-        return data.copyTag();
+    /**
+     * Read-only view of the stack's custom data - never mutate the returned tag.
+     * Write paths build a fresh tag and set the component instead.
+     */
+    private static CompoundTag getReadOnlyTag(ItemStack stack) {
+        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).getUnsafe();
     }
 
     @Override
@@ -52,7 +54,7 @@ public class DeedOfOwnershipItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> list, TooltipFlag flags) {
-        CompoundTag tag = getCustomTag(stack);
+        CompoundTag tag = getReadOnlyTag(stack);
         if (tag.getBoolean("HasBoundEntity") && tag.contains("BoundEntityName")) {
             list.add(Component.translatable("item.domesticationinnovation.deed_of_ownership.desc",
                     tag.getString("BoundEntityName")).withStyle(ChatFormatting.GRAY));

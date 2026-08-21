@@ -102,12 +102,12 @@ public class EntityMixin {
     }
 
     @Inject(
-            method = {"Lnet/minecraft/world/entity/Entity;gameEvent(Lnet/minecraft/core/Holder;)V"},
+            method = {"Lnet/minecraft/world/entity/Entity;gameEvent(Lnet/minecraft/core/Holder;Lnet/minecraft/world/entity/Entity;)V"},
             remap = true,
             at = @At(value = "HEAD"),
             cancellable = true
     )
-    protected void di_gameEvent(Holder<GameEvent> event, CallbackInfo ci) {
+    protected void di_gameEvent(Holder<GameEvent> event, Entity entity, CallbackInfo ci) {
         if((Object)this instanceof LivingEntity && TameableUtils.isTamed((LivingEntity)(Object)this) && TameableUtils.hasEnchant((LivingEntity)(Object)this, DIEnchantmentKeys.MUFFLED)){
             ci.cancel();
         }

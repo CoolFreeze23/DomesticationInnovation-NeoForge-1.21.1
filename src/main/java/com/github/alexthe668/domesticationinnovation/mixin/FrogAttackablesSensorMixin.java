@@ -3,7 +3,6 @@ package com.github.alexthe668.domesticationinnovation.mixin;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.sensing.FrogAttackablesSensor;
-import net.minecraft.world.entity.animal.frog.Frog;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -22,8 +21,6 @@ public class FrogAttackablesSensorMixin {
         if(frog instanceof ModifedToBeTameable tamed && tamed.getTameOwner() != null && !tamed.isStayingStill()){
             if(tamed.isValidAttackTarget(livingEntity)){
                 cir.setReturnValue(true);
-            }else if(tamed instanceof Frog){
-                cir.setReturnValue(false);
             }
         }
     }

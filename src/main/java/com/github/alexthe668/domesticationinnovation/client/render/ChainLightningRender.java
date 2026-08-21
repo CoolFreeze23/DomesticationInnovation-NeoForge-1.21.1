@@ -38,16 +38,16 @@ public class ChainLightningRender extends EntityRenderer<ChainLightningEntity> {
         float z = (float) Mth.lerp(partialTicks, entity.zo, entity.getZ());
         poseStack.translate(-x, -y, -z);
 
-        SimpleLightningRender.renderBolt(
+        long gameTime = entity.level().getGameTime();
+        SimpleLightningRender.updateBolt(entity.getId(), gameTime,
                 from.getEyePosition(partialTicks),
                 entity.position(),
                 LIGHTNING_COLOR,
                 0.1F,
                 5,
                 0.45F,
-                entity.getId() + entity.tickCount,
-                poseStack, buffer, light
-        );
+                2);
+        SimpleLightningRender.renderBolt(entity.getId(), gameTime, partialTicks, poseStack, buffer, light);
         poseStack.popPose();
     }
 

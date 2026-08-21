@@ -3,6 +3,7 @@
     "translate": "enchantment.domesticationinnovation.deflection"
   },
   "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/deflection",
   "weight": 2,
   "max_level": 1,
   "min_cost": {
@@ -10,7 +11,7 @@
     "per_level_above_first": 10
   },
   "max_cost": {
-    "base": 15,
+    "base": 16,
     "per_level_above_first": 10
   },
   "anvil_cost": 4,

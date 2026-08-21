@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "domesticationinnovation:chain_lightning",
+    "domesticationinnovation:herding",
+    "domesticationinnovation:intimidation",
+    "domesticationinnovation:psychic_wall",
+    "domesticationinnovation:shadow_hands",
+    "domesticationinnovation:vampire"
+  ]
+}

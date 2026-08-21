@@ -24,6 +24,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -49,6 +50,7 @@ import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
@@ -63,6 +65,7 @@ import net.neoforged.neoforge.event.entity.living.*;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
@@ -82,7 +85,7 @@ import java.util.function.Predicate;
  * - TickEvent.LevelTickEvent → LevelTickEvent
  * - MobSpawnEvent.FinalizeSpawn → FinalizeSpawnEvent
  * - ForgeRegistries → BuiltInRegistries
- * - ForgeChunkManager → removed (use NeoForge chunk loading API)
+ * - ForgeChunkManager → TicketController (see DIChunkLoadingRegistry)
  * - Enchantment references → ResourceKey<Enchantment> via DIEnchantmentKeys
  * - ResourceLocation constructor → .fromNamespaceAndPath()
  *
@@ -131,7 +134,8 @@ public class CommonProxy {
         if (!entity.level().isClientSide) {
             // BUG FIX: Original called tracker.addBlockedEntityTick() when tracker was null
             CollarTickTracker tracker = COLLAR_TICK_TRACKER_MAP.computeIfAbsent(entity.level(), k -> new CollarTickTracker());
-            tracker.addBlockedEntityTick(entity.getUUID(), 5);
+            // ~2 game ticks; the tracker only decrements once per level tick
+            tracker.addBlockedEntityTick(entity.getUUID(), 3);
         }
     }
 
@@ -199,10 +203,25 @@ public class CommonProxy {
         }
     }
 
+    @SubscribeEvent
+    public void onLevelUnload(LevelEvent.Unload event) {
+        if (event.getLevel() instanceof Level level) {
+            COLLAR_TICK_TRACKER_MAP.remove(level);
+        }
+    }
+
     private void processPendingTeleports(ServerLevel currentLevel) {
-        for (PendingPetTeleport pending : teleportingPets) {
-            Entity entity = pending.entity();
+        if (teleportingPets.isEmpty()) return;
+        // Only handle entries bound for this level; the rest wait for their
+        // own level's tick instead of being consumed (and lost) here
+        Iterator<PendingPetTeleport> iterator = teleportingPets.iterator();
+        while (iterator.hasNext()) {
+            PendingPetTeleport pending = iterator.next();
             ServerLevel targetLevel = pending.targetLevel();
+            if (targetLevel != currentLevel) continue;
+            iterator.remove();
+
+            Entity entity = pending.entity();
             UUID ownerUUID = pending.ownerUUID();
             entity.unRide();
 
@@ -221,7 +240,6 @@ public class CommonProxy {
                 entity.remove(Entity.RemovalReason.DISCARDED);
             }
         }
-        teleportingPets.clear();
     }
 
     private Vec3 findSafePosition(Entity entity, Level level, Vec3 startPos) {
@@ -724,7 +742,7 @@ public class CommonProxy {
                     Entity attacker = event.getSource().getEntity();
                     if (attacker instanceof LivingEntity livingAttacker
                             && !TameableUtils.hasSameOwnerAs(livingAttacker, event.getEntity())) {
-                        livingAttacker.setRemainingFireTicks((5 + event.getEntity().getRandom().nextInt(3)) * 20);
+                        livingAttacker.igniteForSeconds(5 + event.getEntity().getRandom().nextInt(3));
                         livingAttacker.knockback(0.4, event.getEntity().getX() - livingAttacker.getX(),
                                 event.getEntity().getZ() - livingAttacker.getZ());
                     }
@@ -803,7 +821,10 @@ public class CommonProxy {
         }
 
         // --- Healing aura impulse ---
-        if (!event.isCanceled()) {
+        // Healers can only heal entities sharing their owner, so only players
+        // and potential pets warrant the healer scan
+        if (!event.isCanceled()
+                && (event.getEntity() instanceof Player || TameableUtils.couldBeTamed(event.getEntity()))) {
             List<LivingEntity> nearbyHealers = TameableUtils.getNearbyHealers(event.getEntity());
             for (LivingEntity healer : nearbyHealers) {
                 TameableUtils.setHealingAuraImpulse(healer, true);
@@ -974,7 +995,7 @@ public class CommonProxy {
             tameable.setTame(false);
             tameable.setTameOwnerUUID(null);
         }
-        // Note: ModifedToBeTameable from Citadel removed - handle via ModifedToBeTameable
+        TameableUtils.trySetCommand(zombieCopy, 0);
 
         Entity owner = TameableUtils.getOwnerOf(mob);
         zombieCopy.copyPosition(mob);
@@ -1113,6 +1134,7 @@ public class CommonProxy {
                     }
                     ((ModifedToBeTameable) rabbit).setTame(true);
                     ((ModifedToBeTameable) rabbit).setTameOwnerUUID(player.getUUID());
+                    ((ModifedToBeTameable) rabbit).setCommand(1);
                 } else {
                     for (int i = 0; i < 3; ++i) {
                         serverLevel.sendParticles(ParticleTypes.SMOKE,
@@ -1138,11 +1160,35 @@ public class CommonProxy {
         if (!player.level().isClientSide && living.isAlive()) {
             // Read enchantments from the collar tag item
             var itemEnchants = stack.getEnchantments();
+            Map<ResourceLocation, Integer> existingEnchants = TameableUtils.getEnchants(living);
+
+            // Applying a collar identical to the pet's current one (same name,
+            // same enchantments) is a no-op - don't consume the item
+            if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME)
+                    && living.hasCustomName() && stack.getHoverName().equals(living.getCustomName())) {
+                boolean hasSameEnchants = itemEnchants.isEmpty();
+                if (existingEnchants != null) {
+                    hasSameEnchants = true;
+                    for (var entry : itemEnchants.entrySet()) {
+                        ResourceLocation enchantId = entry.getKey().unwrapKey()
+                                .map(net.minecraft.resources.ResourceKey::location)
+                                .orElse(null);
+                        Integer existingLevel = enchantId == null ? null : existingEnchants.get(enchantId);
+                        if (existingLevel == null || existingLevel != entry.getIntValue()) {
+                            hasSameEnchants = false;
+                        }
+                    }
+                }
+                if (hasSameEnchants) {
+                    event.setCanceled(true);
+                    event.setCancellationResult(InteractionResult.FAIL);
+                    return;
+                }
+            }
 
             // Drop the old collar if entity already has one
             blockCollarTick(living);
             if (TameableUtils.hasCollar(living)) {
-                Map<ResourceLocation, Integer> existingEnchants = TameableUtils.getEnchants(living);
                 ItemStack oldCollar = new ItemStack(DIItemRegistry.COLLAR_TAG.get());
                 if (existingEnchants != null && !existingEnchants.isEmpty()) {
                     for (Map.Entry<ResourceLocation, Integer> entry : existingEnchants.entrySet()) {
@@ -1345,6 +1391,14 @@ public class CommonProxy {
             } else {
                 Vec3 safePos = findSafePosition(entity, toLevel, toPos);
                 entity.fallDistance = 0.0F;
+                if (toLevel instanceof ServerLevel serverLevel) {
+                    // Ticket and load the destination chunk so the pet arrives even
+                    // when the owner teleported into unloaded terrain; POST_TELEPORT
+                    // tickets expire on their own a few ticks later
+                    ChunkPos chunkPos = new ChunkPos(BlockPos.containing(safePos));
+                    serverLevel.getChunkSource().addRegionTicket(TicketType.POST_TELEPORT, chunkPos, 0, entity.getId());
+                    serverLevel.getChunk(chunkPos.x, chunkPos.z);
+                }
                 entity.teleportTo(safePos.x, safePos.y, safePos.z);
                 entity.setPortalCooldown();
             }
@@ -1392,28 +1446,34 @@ public class CommonProxy {
         if (!event.getLeft().is(DIItemRegistry.COLLAR_TAG.get()) || !event.getRight().is(DIItemRegistry.COLLAR_TAG.get())) return;
         if (event.getLeft().getEnchantments().isEmpty() || event.getRight().getEnchantments().isEmpty()) return;
 
-        // Combine enchantments from both collar tags
+        // Combine enchantments from both collar tags; the first incompatible
+        // pair (per exclusive-set tags) aborts all remaining merges, and each
+        // conflicting pair adds a flat +1 to the cost. Iterate in registry-id
+        // order so the merge/abort sequence is identical on client and server
+        // (the backing enchantment map has no stable iteration order).
         ItemStack result = event.getLeft().copy();
         var rightEnchants = event.getRight().getEnchantments();
+        boolean canCombine = true;
         int cost = 0;
 
-        for (var entry : rightEnchants.entrySet()) {
+        var sortedEntries = rightEnchants.entrySet().stream()
+                .sorted(Comparator.comparing(en -> en.getKey().unwrapKey().map(k -> k.location().toString()).orElse("")))
+                .toList();
+        for (var entry : sortedEntries) {
             var enchantHolder = entry.getKey();
             int rightLevel = entry.getIntValue();
             int leftLevel = result.getEnchantments().getLevel(enchantHolder);
             int newLevel = leftLevel == rightLevel ? rightLevel + 1 : Math.max(rightLevel, leftLevel);
-            newLevel = Math.min(newLevel, enchantHolder.value().getMaxLevel());
 
-            // Check compatibility
-            boolean compatible = true;
             for (var existingEntry : result.getEnchantments().entrySet()) {
                 if (!existingEntry.getKey().equals(enchantHolder) && !Enchantment.areCompatible(existingEntry.getKey(), enchantHolder)) {
-                    compatible = false;
-                    break;
+                    canCombine = false;
+                    cost++;
                 }
             }
 
-            if (compatible) {
+            if (canCombine) {
+                newLevel = Math.min(newLevel, enchantHolder.value().getMaxLevel());
                 result.enchant(enchantHolder, newLevel);
                 int rarityCost = switch (enchantHolder.value().definition().weight()) {
                     case 1 -> 8;

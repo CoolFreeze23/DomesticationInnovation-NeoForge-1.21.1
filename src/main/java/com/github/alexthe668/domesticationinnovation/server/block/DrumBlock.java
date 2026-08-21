@@ -68,7 +68,9 @@ public class DrumBlock extends BaseEntityBlock {
             int currentCommand = state.getValue(COMMAND);
             level.setBlockAndUpdate(pos, state.cycle(COMMAND));
             int count = issueCommand(level, pos, currentCommand, player.getUUID());
-            player.displayClientMessage(Component.translatable("message.domesticationinnovation.drum_command_" + currentCommand, count), true);
+            if(count > 0){
+                player.displayClientMessage(Component.translatable("message.domesticationinnovation.drum_command_" + currentCommand, count), true);
+            }
             player.playSound(DISoundRegistry.DRUM.get(), 3, 0.3F + 0.4F * random.nextFloat());
             level.gameEvent(player, GameEvent.NOTE_BLOCK_PLAY, pos);
             return InteractionResult.SUCCESS;
@@ -88,15 +90,22 @@ public class DrumBlock extends BaseEntityBlock {
             Predicate<Entity> tames = (animal) -> TameableUtils.isTamed((LivingEntity) animal) && TameableUtils.getOwnerUUIDOf(animal) != null && TameableUtils.getOwnerUUIDOf(animal).equals(issuer);
             AABB area = new AABB(pos.getX() - 32, pos.getY() - 32, pos.getZ() - 32, pos.getX() + 32, pos.getY() + 32, pos.getZ() + 32);
             for(Animal animal : level.getEntitiesOfClass(Animal.class, area, EntitySelector.NO_SPECTATORS.and(tames))){
+                boolean commanded = false;
                 if(animal instanceof ModifedToBeTameable){
                     ((ModifedToBeTameable) animal).setCommand(command);
-                    count++;
+                    commanded = true;
                 } else if (TameableUtils.trySetCommand(animal, command)) {
+                    commanded = true;
+                }
+                if(commanded){
                     count++;
-                } else if(animal instanceof TamableAnimal){
+                }
+                if(animal instanceof TamableAnimal && command != 0){
                     ((TamableAnimal)animal).setOrderedToSit(command == 1);
                     ((TamableAnimal)animal).setInSittingPose(command == 1);
-                    count++;
+                    if(!commanded){
+                        count++;
+                    }
                 }
                 animal.addEffect(new MobEffectInstance(MobEffects.GLOWING, 60, 0));
             }

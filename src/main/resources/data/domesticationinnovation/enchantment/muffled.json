@@ -3,6 +3,7 @@
     "translate": "enchantment.domesticationinnovation.muffled"
   },
   "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/muffled",
   "weight": 1,
   "max_level": 1,
   "min_cost": {
@@ -10,8 +11,8 @@
     "per_level_above_first": 5
   },
   "max_cost": {
-    "base": 10,
-    "per_level_above_first": 5
+    "base": 16,
+    "per_level_above_first": 10
   },
   "anvil_cost": 8,
   "slots": [

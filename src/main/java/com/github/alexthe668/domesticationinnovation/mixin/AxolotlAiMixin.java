@@ -55,7 +55,7 @@ public class AxolotlAiMixin {
                 brain.setActiveActivityIfPossible(DIActivityRegistry.AXOLOTL_STAY.get());
                 ci.cancel();
             } else if (modifedToBeTameable.isFollowingOwner()) {
-                brain.setActiveActivityIfPossible(DIActivityRegistry.AXOLOTL_FOLLOW.get());
+                brain.setActiveActivityToFirstValid(ImmutableList.of(Activity.PLAY_DEAD, Activity.FIGHT, DIActivityRegistry.AXOLOTL_FOLLOW.get()));
                 ci.cancel();
             }
         }
@@ -69,7 +69,7 @@ public class AxolotlAiMixin {
             cancellable = true
     )
     private static void di_getTemptationItems(CallbackInfoReturnable<Predicate<ItemStack>> cir) {
-        cir.setReturnValue(Ingredient.of(Items.TROPICAL_FISH_BUCKET, Items.TROPICAL_FISH));
+        cir.setReturnValue(cir.getReturnValue().or(Ingredient.of(Items.TROPICAL_FISH)));
     }
 
     @Inject(

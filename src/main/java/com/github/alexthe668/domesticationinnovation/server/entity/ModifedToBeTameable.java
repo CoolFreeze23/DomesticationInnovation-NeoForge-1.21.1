@@ -74,6 +74,10 @@ public interface ModifedToBeTameable extends OwnableEntity {
     default InteractionResult playerSetCommand(Player player, LivingEntity pet) {
         int next = (getCommand() + 1) % 3;
         setCommand(next);
+        if (pet instanceof TamableAnimal ta) {
+            ta.setOrderedToSit(next == 1);
+            ta.setInSittingPose(next == 1);
+        }
         player.displayClientMessage(Component.translatable("message.domesticationinnovation.command_" + next, pet.getName()), true);
         return InteractionResult.SUCCESS;
     }

@@ -68,7 +68,7 @@ public class DILootModifier extends LootModifier {
             Optional<Holder.Reference<Enchantment>> holder = registry.get(key);
             if (holder.isPresent()) {
                 int max = holder.get().value().getMaxLevel();
-                int lvl = max > 1 ? 1 + ctx.getRandom().nextInt(max) : 1;
+                int lvl = max > 1 ? 1 + ctx.getRandom().nextInt(max - 1) : 1;
                 loot.add(EnchantedBookItem.createForEnchantment(new EnchantmentInstance(holder.get(), lvl)));
             }
         }

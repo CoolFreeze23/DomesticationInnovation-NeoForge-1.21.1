@@ -54,7 +54,7 @@ public abstract class WolfMixin extends TamableAnimal implements ModifedToBeTame
     )
     private void di_readAdditional(CompoundTag compoundNBT, CallbackInfo ci) {
         if (compoundNBT.contains("DICommand")) {
-            this.setCommand(compoundNBT.getInt("DICommand"));
+            this.entityData.set(COMMAND, compoundNBT.getInt("DICommand"));
         }
     }
 
@@ -83,8 +83,6 @@ public abstract class WolfMixin extends TamableAnimal implements ModifedToBeTame
 
     public void setCommand(int i){
         this.entityData.set(COMMAND, i);
-        this.setOrderedToSit(i == 1);
-        this.setInSittingPose(i == 1);
     }
 
     @Inject(

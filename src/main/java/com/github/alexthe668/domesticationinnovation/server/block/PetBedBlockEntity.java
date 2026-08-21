@@ -78,10 +78,9 @@ public class PetBedBlockEntity extends BlockEntity {
                         living.setYRot(90);
                         break;
                 }
-                if (!TameableUtils.trySetCommand(living, 1)) {
-                    if (living instanceof TamableAnimal tame) {
-                        tame.setOrderedToSit(true);
-                    }
+                TameableUtils.trySetCommand(living, 1);
+                if (living instanceof TamableAnimal tame) {
+                    tame.setOrderedToSit(true);
                 }
                 level.addFreshEntity(living);
                 Entity owner = TameableUtils.getOwnerOf(entity);

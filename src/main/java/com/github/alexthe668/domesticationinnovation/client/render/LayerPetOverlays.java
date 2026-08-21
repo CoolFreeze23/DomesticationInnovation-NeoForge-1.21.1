@@ -159,23 +159,24 @@ public class LayerPetOverlays extends RenderLayer {
                     float x = (float) Mth.lerp(partialTicks, entity.xo, entity.getX());
                     float y = (float) Mth.lerp(partialTicks, entity.yo, entity.getY());
                     float z = (float) Mth.lerp(partialTicks, entity.zo, entity.getZ());
+                    long gameTime = living.level().getGameTime();
                     if (living.hurtTime > 0 && living.hurtTime == living.hurtDuration - 1) {
                         float height = -2 + entity.getBbHeight() * 0.8F;
                         float ownerHeight = -2 + owner.getBbHeight() * 0.6F;
-                        matrixStackIn.pushPose();
-                        matrixStackIn.mulPose(Axis.YN.rotationDegrees(f));
-                        matrixStackIn.mulPose(Axis.XN.rotationDegrees(180));
-                        matrixStackIn.pushPose();
-                        matrixStackIn.translate(-x, -y, -z);
-                        SimpleLightningRender.renderBolt(
+                        SimpleLightningRender.updateBolt(living.getId(), gameTime,
                                 new Vec3(x, y + height, z),
                                 owner.position().add(0, ownerHeight, 0),
-                                HEALTH_SIPHON_COLOR, 0.05F, 3, 0.2F,
-                                living.getId() + living.tickCount,
-                                matrixStackIn, bufferIn, packedLightIn);
-                        matrixStackIn.popPose();
-                        matrixStackIn.popPose();
+                                HEALTH_SIPHON_COLOR, 0.05F, 3, 0.2F, 5);
                     }
+                    matrixStackIn.pushPose();
+                    matrixStackIn.mulPose(Axis.YN.rotationDegrees(f));
+                    matrixStackIn.mulPose(Axis.XN.rotationDegrees(180));
+                    matrixStackIn.pushPose();
+                    matrixStackIn.translate(-x, -y, -z);
+                    SimpleLightningRender.renderBolt(living.getId(), gameTime, partialTicks,
+                            matrixStackIn, bufferIn, packedLightIn);
+                    matrixStackIn.popPose();
+                    matrixStackIn.popPose();
                 }
             }
             if (TameableUtils.hasEnchant(living, DIEnchantmentKeys.VOID_CLOUD) && !living.isInWaterOrBubble() && !living.onGround() && TameableUtils.getFallDistance(living) >= 3.0F) {

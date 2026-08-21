@@ -84,6 +84,6 @@ public class FrogAiMixin {
             cancellable = true
     )
     private static void di_getTemptationItems(CallbackInfoReturnable<Predicate<ItemStack>> cir) {
-        cir.setReturnValue(Ingredient.of(DITagRegistry.TAME_FROGS_WITH));
+        cir.setReturnValue(cir.getReturnValue().or(Ingredient.of(DITagRegistry.TAME_FROGS_WITH)));
     }
 }

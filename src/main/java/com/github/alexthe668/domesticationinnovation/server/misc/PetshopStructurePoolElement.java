@@ -41,12 +41,6 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
     public static final ResourceLocation CAGE_1_MOBS = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "petstore_cage_1");
     public static final ResourceLocation CAGE_2_MOBS = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "petstore_cage_2");
     public static final ResourceLocation CAGE_3_MOBS = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "petstore_cage_3");
-    private static boolean initializedMobLists = false;
-    private static EntityType[] fishtankMobs = null;
-    private static EntityType[] cage0Mobs = null;
-    private static EntityType[] cage1Mobs = null;
-    private static EntityType[] cage2Mobs = null;
-    private static EntityType[] cage3Mobs = null;
 
     public static final MapCodec<PetshopStructurePoolElement> CODEC = RecordCodecBuilder.mapCodec((p_210357_) -> {
         return p_210357_.group(templateCodec(), processorsCodec(), projectionCodec()).apply(p_210357_, (a, b, c) -> new PetshopStructurePoolElement(a, b, c, java.util.Optional.empty()));
@@ -81,15 +75,7 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
             return;
         }
         String contents = structureBlockInfo.nbt().getString("metadata");
-        DomesticationMod.LOGGER.info("PetshopStructurePoolElement: processing data marker '{}' at {}", contents, structureBlockInfo.pos());
-        if(!initializedMobLists){
-            fishtankMobs = getAllMatchingEntities(DITagRegistry.PETSTORE_FISHTANK).toArray(new EntityType[0]);
-            cage0Mobs = getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_0).toArray(new EntityType[0]);
-            cage1Mobs = getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_1).toArray(new EntityType[0]);
-            cage2Mobs = getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_2).toArray(new EntityType[0]);
-            cage3Mobs = getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_3).toArray(new EntityType[0]);
-            initializedMobLists = true;
-        }
+        DomesticationMod.LOGGER.debug("PetshopStructurePoolElement: processing data marker '{}' at {}", contents, structureBlockInfo.pos());
         switch (contents) {
             case "petshop_water":
                 BlockState state = Blocks.WATER.defaultBlockState();
@@ -117,7 +103,7 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
                     }
                     state = coralBlock.defaultBlockState().setValue(BaseCoralPlantTypeBlock.WATERLOGGED, true);
                 }
-                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 2,  random, fishtankMobs);
+                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 2,  random, getAllMatchingEntities(DITagRegistry.PETSTORE_FISHTANK));
                 levelAccessor.setBlock(structureBlockInfo.pos(), state, 2);
                 break;
             case "petshop_chest":
@@ -128,19 +114,19 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
                 }
                 break;
             case "petshop_cage_0"://wolf, rabbit or cat
-                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1 + random.nextInt(2), random, cage0Mobs);
+                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1 + random.nextInt(2), random, getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_0));
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 4);
                 break;
             case "petshop_cage_1"://desert terrarium
-                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 2 + random.nextInt(2), random, cage1Mobs);
+                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 2 + random.nextInt(2), random, getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_1));
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 2);
                 break;
             case "petshop_cage_2"://ice terrarium
-                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1 + random.nextInt(2), random, cage2Mobs);
+                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1 + random.nextInt(2), random, getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_2));
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 2);
                 break;
             case "petshop_cage_3"://parrot
-                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1, random, cage3Mobs);
+                spawnAnimalsAt(levelAccessor, structureBlockInfo.pos(), 1, random, getAllMatchingEntities(DITagRegistry.PETSTORE_CAGE_3));
                 levelAccessor.setBlock(structureBlockInfo.pos(), Blocks.AIR.defaultBlockState(), 2);
                 break;
             case "petshop_villager":
@@ -151,14 +137,19 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
     }
 
     private List<EntityType<?>> getAllMatchingEntities(TagKey<EntityType<?>> tag) {
-       return BuiltInRegistries.ENTITY_TYPE.stream().filter((type -> type.is(tag))).toList();
+       return BuiltInRegistries.ENTITY_TYPE.getTag(tag)
+               .map(holderSet -> holderSet.stream().map(Holder::value).toList())
+               .orElseGet(List::of);
     }
 
-    public void spawnAnimalsAt(LevelAccessor accessor, BlockPos at, int count, RandomSource random, EntityType... types) {
-        if (types.length > 0 && count > 0 && accessor instanceof ServerLevelAccessor serverLevel) {
+    public void spawnAnimalsAt(LevelAccessor accessor, BlockPos at, int count, RandomSource random, List<EntityType<?>> types) {
+        if (!types.isEmpty() && count > 0 && accessor instanceof ServerLevelAccessor serverLevel) {
             for (int i = 0; i < count; i++) {
-                int index = types.length == 1 ? 0 : random.nextInt(types.length);
-                Entity entity = types[index].create(serverLevel.getLevel());
+                int index = types.size() == 1 ? 0 : random.nextInt(types.size());
+                Entity entity = types.get(index).create(serverLevel.getLevel());
+                if (entity == null) {
+                    continue;
+                }
                 entity.setPos(Vec3.atBottomCenterOf(at));
                 entity.setYRot(random.nextInt(360) - 180);
                 entity.setXRot(random.nextInt(360) - 180);
@@ -177,8 +168,11 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
             if (villager != null) {
                 villager.setPos(Vec3.atBottomCenterOf(at));
                 villager.setVillagerData(villager.getVillagerData()
+                        .setType(VillagerType.byBiome(accessor.getBiome(at)))
                         .setProfession(DIVillagerRegistry.ANIMAL_TAMER.get())
-                        .setLevel(2));
+                        .setLevel(1));
+                // non-zero XP keeps vanilla's profession-reset behavior from stripping the profession
+                villager.setVillagerXp(1);
                 villager.setPersistenceRequired();
                 villager.finalizeSpawn(serverLevel, serverLevel.getCurrentDifficultyAt(villager.blockPosition()), MobSpawnType.STRUCTURE, null);
                 serverLevel.addFreshEntityWithPassengers(villager);
@@ -189,8 +183,10 @@ public class PetshopStructurePoolElement extends LegacySinglePoolElement {
     @Override
     protected StructurePlaceSettings getSettings(Rotation rotation, BoundingBox boundingBox, LiquidSettings liquidSettings, boolean keepJigsaws) {
         StructurePlaceSettings settings = super.getSettings(rotation, boundingBox, liquidSettings, keepJigsaws);
-        settings.setIgnoreEntities(false);
-        settings.setFinalizeEntities(true);
+        // place template air so shop interiors are carved out of terrain, but keep ignoring
+        // structure blocks so data markers are only handled by our place() override
+        settings.popProcessor(BlockIgnoreProcessor.STRUCTURE_AND_AIR);
+        settings.addProcessor(BlockIgnoreProcessor.STRUCTURE_BLOCK);
         return settings;
     }
 

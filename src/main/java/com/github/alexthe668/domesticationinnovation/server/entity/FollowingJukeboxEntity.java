@@ -34,6 +34,10 @@ public class FollowingJukeboxEntity extends Entity {
 
     private static final EntityDataAccessor<Optional<UUID>> FOLLOWING_UUID = SynchedEntityData.defineId(FollowingJukeboxEntity.class, EntityDataSerializers.OPTIONAL_UUID);
     private static final EntityDataAccessor<ItemStack> JUKEBOX_ITEM = SynchedEntityData.defineId(FollowingJukeboxEntity.class, EntityDataSerializers.ITEM_STACK);
+    // Server-side cache of the owner's disc; decoding it from the pet tag every
+    // tick would re-parse NBT and mark the synched item dirty each time
+    @Nullable
+    private ItemStack cachedDisc;
 
     public FollowingJukeboxEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -47,7 +51,11 @@ public class FollowingJukeboxEntity extends Entity {
         if (!level().isClientSide) {
             if (following != null) {
                 float width = following.getBbWidth() + 0.6F;
-                this.setRecordItem(this.getDiscFromOwner());
+                if (this.cachedDisc == null) {
+                    this.cachedDisc = following instanceof LivingEntity living
+                            ? TameableUtils.getPetJukeboxDisc(living) : ItemStack.EMPTY;
+                    this.setRecordItem(this.cachedDisc);
+                }
                 float speed = 0.05F;
                 if(this.distanceTo(following) > 2 + width){
                     this.copyPosition(following);
@@ -125,6 +133,7 @@ public class FollowingJukeboxEntity extends Entity {
     public void addDiscToOwner(ItemStack stack){
         if(getFollowing() instanceof LivingEntity living){
             TameableUtils.setPetJukeboxDisc(living, stack);
+            this.cachedDisc = null;
             if(stack.isEmpty()){
                 this.level().broadcastEntityEvent(this, (byte) 67);
             }

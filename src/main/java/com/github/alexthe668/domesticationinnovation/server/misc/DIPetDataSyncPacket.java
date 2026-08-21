@@ -2,9 +2,9 @@ package com.github.alexthe668.domesticationinnovation.server.misc;
 
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -20,27 +20,19 @@ public record DIPetDataSyncPacket(int entityId, CompoundTag data) implements Cus
     public static final CustomPacketPayload.Type<DIPetDataSyncPacket> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "pet_data_sync"));
 
-    public static final StreamCodec<FriendlyByteBuf, DIPetDataSyncPacket> STREAM_CODEC =
-            StreamCodec.of(DIPetDataSyncPacket::write, DIPetDataSyncPacket::read);
-
-    public static DIPetDataSyncPacket read(FriendlyByteBuf buf) {
-        return new DIPetDataSyncPacket(buf.readVarInt(), buf.readNbt());
-    }
-
-    public static void write(FriendlyByteBuf buf, DIPetDataSyncPacket packet) {
-        buf.writeVarInt(packet.entityId);
-        buf.writeNbt(packet.data);
-    }
+    public static final StreamCodec<FriendlyByteBuf, DIPetDataSyncPacket> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, DIPetDataSyncPacket::entityId,
+            ByteBufCodecs.TRUSTED_COMPOUND_TAG, DIPetDataSyncPacket::data,
+            DIPetDataSyncPacket::new
+    );
 
     public static void handleClient(DIPetDataSyncPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (Minecraft.getInstance().level != null) {
-                Entity entity = Minecraft.getInstance().level.getEntity(packet.entityId);
-                if (entity != null) {
-                    entity.setData(DIAttachments.PET_DATA, packet.data);
-                }
-            }
-        });
+        // Resolve the entity through the receiving player's level - keeps this
+        // class free of client-only references so it can load on dedicated servers
+        Entity entity = context.player().level().getEntity(packet.entityId);
+        if (entity != null) {
+            entity.setData(DIAttachments.PET_DATA, packet.data);
+        }
     }
 
     @Override

@@ -1,6 +1,5 @@
 package com.github.alexthe668.domesticationinnovation.server.block;
 
-import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
 import com.github.alexthe668.domesticationinnovation.server.misc.DIWorldData;
 import com.github.alexthe668.domesticationinnovation.server.misc.LanternRequest;
@@ -16,7 +15,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,7 +78,7 @@ public class WaywardLanternBlockEntity extends BlockEntity {
         ChunkPos chunkPos = new ChunkPos(center);
         for(int i = -1; i <= 1; i++){
             for(int j = -1; j <= 1; j++){
-                serverLevel.setChunkForced(chunkPos.x + i, chunkPos.z + j, load);
+                DIChunkLoadingRegistry.PET_TICKET_CONTROLLER.forceChunk(serverLevel, ticket, chunkPos.x + i, chunkPos.z + j, load, true);
             }
         }
     }

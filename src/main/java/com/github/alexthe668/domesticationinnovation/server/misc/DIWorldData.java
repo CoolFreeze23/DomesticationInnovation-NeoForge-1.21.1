@@ -24,11 +24,7 @@ public class DIWorldData extends SavedData {
         if (world instanceof ServerLevel) {
             ServerLevel overworld = world.getServer().getLevel(Level.OVERWORLD);
             DimensionDataStorage storage = overworld.getDataStorage();
-            DIWorldData data = storage.computeIfAbsent(new SavedData.Factory<>(DIWorldData::new, DIWorldData::load), IDENTIFIER);
-            if (data != null) {
-                data.setDirty();
-            }
-            return data;
+            return storage.computeIfAbsent(new SavedData.Factory<>(DIWorldData::new, DIWorldData::load), IDENTIFIER);
         }
         return null;
     }
@@ -92,10 +88,12 @@ public class DIWorldData extends SavedData {
 
     public void addRespawnRequest(RespawnRequest request){
         this.respawnRequestList.add(request);
+        this.setDirty();
     }
 
     public void removeRespawnRequest(RespawnRequest request){
         this.respawnRequestList.remove(request);
+        this.setDirty();
     }
     public List<RespawnRequest> getRespawnRequestsFor(Level level, BlockPos pos){
         List<RespawnRequest> list = new ArrayList<>();
@@ -110,14 +108,18 @@ public class DIWorldData extends SavedData {
 
     public void addLanternRequest(LanternRequest request){
         this.lanternRequestList.add(request);
+        this.setDirty();
     }
 
     public void removeLanternRequest(LanternRequest request){
         this.lanternRequestList.remove(request);
+        this.setDirty();
     }
 
     public void removeMatchingLanternRequests(UUID reloaded){
-        this.lanternRequestList.removeIf(request -> request.getPetUUID().equals(reloaded));
+        if(this.lanternRequestList.removeIf(request -> request.getPetUUID().equals(reloaded))){
+            this.setDirty();
+        }
     }
 
     public List<LanternRequest> getLanternRequestsFor(UUID uuid){

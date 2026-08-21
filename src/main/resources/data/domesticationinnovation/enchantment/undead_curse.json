@@ -3,15 +3,16 @@
     "translate": "enchantment.domesticationinnovation.undead_curse"
   },
   "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/undead_curse",
   "weight": 1,
   "max_level": 1,
   "min_cost": {
-    "base": 15,
-    "per_level_above_first": 15
+    "base": 25,
+    "per_level_above_first": 0
   },
   "max_cost": {
-    "base": 20,
-    "per_level_above_first": 15
+    "base": 50,
+    "per_level_above_first": 0
   },
   "anvil_cost": 8,
   "slots": [

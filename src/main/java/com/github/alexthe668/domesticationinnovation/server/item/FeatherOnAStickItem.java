@@ -25,7 +25,7 @@ public class FeatherOnAStickItem extends Item {
                 int i = player.fishing.retrieve(itemstack);
                 itemstack.hurtAndBreak(i, (net.minecraft.server.level.ServerLevel) level,
                     (net.minecraft.server.level.ServerPlayer) player,
-                    (item) -> player.onEquippedItemBroken(item, net.minecraft.world.entity.EquipmentSlot.MAINHAND));
+                    (item) -> player.onEquippedItemBroken(item, net.minecraft.world.entity.LivingEntity.getSlotForHand(hand)));
             }
             level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FISHING_BOBBER_RETRIEVE, SoundSource.NEUTRAL, 1.0F, 0.4F / (level.getRandom().nextFloat() * 0.4F + 0.8F));
             player.gameEvent(GameEvent.ITEM_INTERACT_FINISH);

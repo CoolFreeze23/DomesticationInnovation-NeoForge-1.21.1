@@ -40,18 +40,20 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.*;
+import net.neoforged.neoforge.common.util.TriState;
 import org.joml.Matrix4f;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.stream.Collectors;
 
 @OnlyIn(Dist.CLIENT)
 public class ClientProxy extends CommonProxy {
 
     public static final Map<Integer, DiscJockeySound> DISC_JOCKEY_SOUND_MAP = new HashMap<>();
-    public static Map<Entity, int[]> shadowPunchRenderData = new HashMap<>();
+    public static Map<Entity, int[]> shadowPunchRenderData = new WeakHashMap<>();
 
     /**
      * Register client-side mod event listeners.
@@ -128,15 +130,10 @@ public class ClientProxy extends CommonProxy {
     }
 
     // =========================================================================
-    // Client events - replaces Citadel's EventGetOutlineColor and Forge events
+    // Client events
     // =========================================================================
 
-    /**
-     * Replaces Citadel's EventGetOutlineColor.
-     * In NeoForge, use RenderHighlightEvent or custom rendering to handle outline colors.
-     * The HighlightedBlockEntity outline is handled in its renderer instead.
-     */
-    // Outline color for HighlightedBlockEntity is handled in RenderHighlightedBlock via custom glowing effect
+    // Outline color for HighlightedBlockEntity is applied in RenderHighlightedBlock
 
     @SubscribeEvent
     public void renderNametagEvent(RenderNameTagEvent event) {
@@ -144,7 +141,7 @@ public class ClientProxy extends CommonProxy {
                 && TameableUtils.isPetOf(Minecraft.getInstance().player, event.getEntity())
                 && TameableUtils.hasAnyEnchants((LivingEntity) event.getEntity())
                 && Minecraft.getInstance().player.isShiftKeyDown()) {
-            event.setContent(net.minecraft.network.chat.Component.empty());
+            event.setCanRender(TriState.FALSE);
             renderNametagEnchantments(event.getEntity(), event.getContent(), event.getPoseStack(),
                     event.getMultiBufferSource(), event.getPackedLight());
         }
@@ -192,8 +189,7 @@ public class ClientProxy extends CommonProxy {
         List<Component> enchantList = TameableUtils.getEnchantDescriptions(living);
         double distSq = Minecraft.getInstance().getEntityRenderDispatcher().distanceToSqr(entity);
 
-        // Note: ForgeHooksClient.isNameplateInRenderDistance replaced with distance check
-        if (distSq > 4096.0D) return; // ~64 blocks
+        if (!net.neoforged.neoforge.client.ClientHooks.isNameplateInRenderDistance(entity, distSq)) return;
 
         if (nameTag instanceof MutableComponent mutable) {
             int health = Math.round(living.getHealth());
@@ -258,6 +254,11 @@ public class ClientProxy extends CommonProxy {
 
     @Override
     public void updateVisualDataForMob(Entity entity, int[] arr) {
+        // On an integrated server this proxy is shared by both logical sides; only the
+        // client-side entity instances are ever read by the render layer.
+        if (!entity.level().isClientSide) {
+            return;
+        }
         shadowPunchRenderData.put(entity, arr);
     }
 

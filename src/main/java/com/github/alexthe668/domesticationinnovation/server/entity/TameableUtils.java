@@ -96,8 +96,9 @@ public class TameableUtils {
 
     private static void setPetTag(LivingEntity entity, CompoundTag tag) {
         entity.setData(DIAttachments.PET_DATA, tag);
-        // Sync to all tracking clients so rendering/effects work
-        if (!entity.level().isClientSide) {
+        // Sync to all tracking clients so rendering/effects work; a removed entity
+        // (despawn/chunk unload) has no use for one last packet
+        if (!entity.level().isClientSide && !entity.isRemoved()) {
             DINetworkRegistry.syncPetData(entity);
         }
     }
@@ -190,7 +191,7 @@ public class TameableUtils {
     }
 
     // =========================================================================
-    // Modded mob command compat (Ice and Fire, etc.)
+    // Modded mob command compat (Alex's Mobs, Ice and Fire, etc.)
     // Uses reflection to detect setCommand(int)/getCommand() on any TamableAnimal
     // so the Command Drum, Wayward Lantern, etc. work without a hard dependency.
     // =========================================================================
@@ -199,9 +200,34 @@ public class TameableUtils {
     private static final Map<Class<?>, Object> SET_COMMAND_CACHE = new HashMap<>();
     private static final Map<Class<?>, Object> GET_COMMAND_CACHE = new HashMap<>();
 
+    private static final String ALEXS_MOBS_PACKAGE_PREFIX = "com.github.alexthe666.alexsmobs";
+
+    /**
+     * Alex's Mobs numbers its commands 0 = wander, 1 = follow, 2 = sit, while
+     * DI uses 0 = wander, 1 = stay, 2 = follow. Swap 1 and 2 whenever a
+     * command crosses the reflection boundary into an Alex's Mobs entity so
+     * both sides keep their own semantics.
+     */
+    private static int translateForeignCommand(int command) {
+        if (command == 1) return 2;
+        if (command == 2) return 1;
+        return command;
+    }
+
+    /**
+     * The 1/2 swap only holds for Alex's Mobs; other mods exposing
+     * setCommand(int)/getCommand() (e.g. Ice and Fire) use their own numbering
+     * and get the DI value passed through unchanged.
+     */
+    private static boolean usesAlexsMobsCommandOrder(LivingEntity entity) {
+        return entity.getClass().getName().startsWith(ALEXS_MOBS_PACKAGE_PREFIX);
+    }
+
     /**
      * Try to call setCommand(int) on a modded tameable entity via reflection.
      * Handles ModifedToBeTameable first, then checks for a reflected method.
+     * Takes DI command semantics; the value is translated for Alex's Mobs
+     * entities and passed through unchanged for other mods.
      * Returns true if the command was set successfully.
      */
     public static boolean trySetCommand(LivingEntity entity, int command) {
@@ -212,7 +238,7 @@ public class TameableUtils {
         Method method = lookupMethod(entity.getClass(), SET_COMMAND_CACHE, "setCommand", int.class);
         if (method != null) {
             try {
-                method.invoke(entity, command);
+                method.invoke(entity, usesAlexsMobsCommandOrder(entity) ? translateForeignCommand(command) : command);
                 return true;
             } catch (Exception ignored) {}
         }
@@ -221,7 +247,9 @@ public class TameableUtils {
 
     /**
      * Try to call getCommand() on a modded tameable entity via reflection.
-     * Returns the command value, or -1 if the entity has no such method.
+     * Returns the command value in DI semantics (translated for Alex's Mobs
+     * entities, passed through for other mods), or -1 if the entity has no
+     * such method.
      */
     public static int tryGetCommand(LivingEntity entity) {
         if (entity instanceof ModifedToBeTameable m) {
@@ -230,7 +258,8 @@ public class TameableUtils {
         Method method = lookupMethod(entity.getClass(), GET_COMMAND_CACHE, "getCommand");
         if (method != null) {
             try {
-                return (int) method.invoke(entity);
+                int raw = (int) method.invoke(entity);
+                return usesAlexsMobsCommandOrder(entity) ? translateForeignCommand(raw) : raw;
             } catch (Exception ignored) {}
         }
         return -1;
@@ -255,20 +284,54 @@ public class TameableUtils {
     // =========================================================================
 
     /**
+     * Decoded StoredPetEnchantments lists, one weak map per logical side.
+     * Enchant levels are queried ~20 times per pet per tick; decoding the NBT
+     * list once and reusing it until the list instance changes avoids
+     * re-parsing on every call. Entity.equals/hashCode compare entity ids,
+     * which repeat between a ClientLevel and the integrated server's levels,
+     * so a single shared map would make the two sides continually evict each
+     * other's entries for the same pet - hence the per-side split.
+     * Server-side writes invalidate via setEnchantmentTag; client-side sync
+     * replaces the whole attachment tag, which the list-identity check catches.
+     */
+    private static final Map<LivingEntity, DecodedEnchants> CLIENT_ENCHANT_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<LivingEntity, DecodedEnchants> SERVER_ENCHANT_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static Map<LivingEntity, DecodedEnchants> enchantCacheFor(LivingEntity entity) {
+        return entity.level().isClientSide() ? CLIENT_ENCHANT_CACHE : SERVER_ENCHANT_CACHE;
+    }
+
+    private record DecodedEnchants(ListTag source, Map<ResourceLocation, Integer> levels) {}
+
+    private static Map<ResourceLocation, Integer> getDecodedEnchants(LivingEntity entity, ListTag listTag) {
+        Map<LivingEntity, DecodedEnchants> cache = enchantCacheFor(entity);
+        DecodedEnchants cached = cache.get(entity);
+        if (cached == null || cached.source() != listTag) {
+            Map<ResourceLocation, Integer> levels = new HashMap<>();
+            for (int i = 0; i < listTag.size(); i++) {
+                CompoundTag entry = listTag.getCompound(i);
+                ResourceLocation id = ResourceLocation.tryParse(entry.getString("id"));
+                if (id != null) {
+                    levels.put(id, entry.getInt("lvl"));
+                }
+            }
+            cached = new DecodedEnchants(listTag, levels);
+            cache.put(entity, cached);
+        }
+        return cached.levels();
+    }
+
+    /**
      * Get the enchantment level for a data-driven enchantment on this entity.
      * Reads from the StoredPetEnchantments ListTag in the pet data attachment.
      */
     public static int getEnchantLevel(LivingEntity entity, ResourceKey<Enchantment> enchantmentKey) {
         ListTag listTag = getEnchantmentList(entity);
-        String enchantId = enchantmentKey.location().toString();
-        if (listTag != null && DomesticationMod.CONFIG.isEnchantEnabled(enchantmentKey.location().getPath())) {
-            for (int i = 0; i < listTag.size(); i++) {
-                CompoundTag entry = listTag.getCompound(i);
-                String id = entry.getString("id");
-                if (id.equals(enchantId)) {
-                    return entry.getInt("lvl");
-                }
-            }
+        ResourceLocation location = enchantmentKey.location();
+        if (listTag != null && DomesticationMod.CONFIG.isEnchantEnabled(location.getPath())) {
+            return getDecodedEnchants(entity, listTag).getOrDefault(location, 0);
         }
         return 0;
     }
@@ -301,7 +364,9 @@ public class TameableUtils {
 
     @Nullable
     private static ListTag getEnchantmentList(LivingEntity entity) {
-        CompoundTag tag = getPetTag(entity);
+        // Read-only lookup: hasEnchant/getEnchantLevel are queried for arbitrary
+        // living entities, so this must not attach a tag to non-pets
+        CompoundTag tag = DIAttachments.readPetData(entity);
         return tag.contains(ENCHANTMENT_TAG) ? tag.getList(ENCHANTMENT_TAG, 10) : null;
     }
 
@@ -340,6 +405,7 @@ public class TameableUtils {
 
     private static void setEnchantmentTag(LivingEntity entity, ListTag enchants) {
         Map<ResourceLocation, Integer> prevEnchants = getEnchants(entity);
+        enchantCacheFor(entity).remove(entity);
         CompoundTag tag = getPetTag(entity);
         tag.put(ENCHANTMENT_TAG, enchants);
         tag.putInt(COLLAR_SWAP_COOLDOWN, 20);
@@ -452,7 +518,7 @@ public class TameableUtils {
         }
     }
 
-    public static int getFrozenTime(LivingEntity e) { return getPetTag(e).getInt(FROZEN_TIME_TAG); }
+    public static int getFrozenTime(LivingEntity e) { return DIAttachments.readPetData(e).getInt(FROZEN_TIME_TAG); }
     public static void setFrozenTimeTag(LivingEntity e, int time) {
         CompoundTag tag = getPetTag(e); tag.putInt(FROZEN_TIME_TAG, time); setPetTag(e, tag);
     }
@@ -498,16 +564,20 @@ public class TameableUtils {
     }
 
     public static int getPsychicWallCooldown(LivingEntity e) { return getPetTag(e).getInt(PSYCHIC_WALL_COOLDOWN); }
+    // Server-only countdown (only read inside server-gated ticking) - stored
+    // without broadcasting so it does not ship a packet every tick
     public static void setPsychicWallCooldown(LivingEntity e, int t) {
-        CompoundTag tag = getPetTag(e); tag.putInt(PSYCHIC_WALL_COOLDOWN, t); setPetTag(e, tag);
+        CompoundTag tag = getPetTag(e); tag.putInt(PSYCHIC_WALL_COOLDOWN, t); DINetworkRegistry.setPetDataNoSync(e, tag);
     }
     public static int getIntimidationCooldown(LivingEntity e) { return getPetTag(e).getInt(INTIMIDATION_COOLDOWN); }
     public static void setIntimidationCooldown(LivingEntity e, int t) {
         CompoundTag tag = getPetTag(e); tag.putInt(INTIMIDATION_COOLDOWN, t); setPetTag(e, tag);
     }
     public static int getBlazingProtectionCooldown(LivingEntity e) { return getPetTag(e).getInt(BLAZING_PROTECTION_COOLDOWN); }
+    // Server-only countdown (only read inside server-gated ticking) - stored
+    // without broadcasting; the bars setter still syncs, shipping the full tag
     public static void setBlazingProtectionCooldown(LivingEntity e, int t) {
-        CompoundTag tag = getPetTag(e); tag.putInt(BLAZING_PROTECTION_COOLDOWN, t); setPetTag(e, tag);
+        CompoundTag tag = getPetTag(e); tag.putInt(BLAZING_PROTECTION_COOLDOWN, t); DINetworkRegistry.setPetDataNoSync(e, tag);
     }
     public static int getBlazingProtectionBars(LivingEntity e) { return getPetTag(e).getInt(BLAZING_PROTECTION_BARS); }
     public static void setBlazingProtectionBars(LivingEntity e, int t) {
@@ -631,7 +701,15 @@ public class TameableUtils {
 
     public static void scareRandomMonsters(LivingEntity scary, int level) {
         boolean interval = (scary.tickCount + scary.getId()) % Math.max(140, 600 - level * 200) == 0;
-        if (!interval && scary.hurtTime != 4 && getIntimidationCooldown(scary) <= 0) return;
+        int cooldown = getIntimidationCooldown(scary);
+        if (!interval && scary.hurtTime != 4 && cooldown <= 0) return;
+
+        // While on cooldown just count it down; the monsters already got their
+        // flee paths when the intimidation procced
+        if (cooldown > 0 && !interval) {
+            setIntimidationCooldown(scary, cooldown - 1);
+            return;
+        }
 
         Predicate<Entity> notOnTeamMonster = a -> a instanceof Monster
                 && !hasSameOwnerAs((LivingEntity) a, scary) && a.distanceTo(scary) > 3 + scary.getBbWidth() * 1.6F;
@@ -640,18 +718,14 @@ public class TameableUtils {
         list.sort(Comparator.comparingDouble(scary::distanceToSqr));
         if (list.isEmpty()) return;
 
-        if (getIntimidationCooldown(scary) > 0 && !interval) {
-            setIntimidationCooldown(scary, getIntimidationCooldown(scary) - 1);
-        } else {
-            Vec3 rots = list.get(0).getEyePosition().subtract(scary.getEyePosition()).normalize();
-            float f = Mth.sqrt((float) (rots.x * rots.x + rots.z * rots.z));
-            double yRot = Math.atan2(-rots.z, -rots.x) * (180F / (float) Math.PI) + 90F;
-            double xRot = Math.atan2(-rots.y, f) * (180F / (float) Math.PI);
-            scary.level().addParticle(DIParticleRegistry.INTIMIDATION.get(),
-                    scary.getX(), scary.getY(), scary.getZ(), scary.getId(), xRot, yRot);
-            setIntimidationCooldown(scary, 70 * level);
-            if (scary instanceof Mob mob) mob.playAmbientSound();
-        }
+        Vec3 rots = list.get(0).getEyePosition().subtract(scary.getEyePosition()).normalize();
+        float f = Mth.sqrt((float) (rots.x * rots.x + rots.z * rots.z));
+        double yRot = Math.atan2(-rots.z, -rots.x) * (180F / (float) Math.PI) + 90F;
+        double xRot = Math.atan2(-rots.y, f) * (180F / (float) Math.PI);
+        scary.level().addParticle(DIParticleRegistry.INTIMIDATION.get(),
+                scary.getX(), scary.getY(), scary.getZ(), scary.getId(), xRot, yRot);
+        setIntimidationCooldown(scary, 70 * level);
+        if (scary instanceof Mob mob) mob.playAmbientSound();
         for (PathfinderMob monster : list) {
             Vec3 vec = LandRandomPos.getPosAway(monster, 11 * level, 7, scary.position());
             if (vec != null) monster.getNavigation().moveTo(vec.x, vec.y, vec.z, 1.5D);
@@ -688,7 +762,9 @@ public class TameableUtils {
                                 : state.is(BlockTags.GOLD_ORES) || state.is(BlockTags.IRON_ORES)
                                 || state.is(BlockTags.DIAMOND_ORES) || state.is(BlockTags.EMERALD_ORES)
                                 || state.is(BlockTags.COPPER_ORES) || state.is(BlockTags.COAL_ORES)
-                                || state.is(BlockTags.LAPIS_ORES) || state.is(BlockTags.REDSTONE_ORES);
+                                || state.is(BlockTags.LAPIS_ORES) || state.is(BlockTags.REDSTONE_ORES)
+                                || state.is(Blocks.NETHER_QUARTZ_ORE) || state.is(Blocks.NETHER_GOLD_ORE)
+                                || state.is(Blocks.ANCIENT_DEBRIS);
                         if (isOre) {
                             if (ores.size() < maxOres) ores.add(offset);
                             else break;
@@ -746,7 +822,7 @@ public class TameableUtils {
     }
 
     public static List<LivingEntity> getNearbyHealers(LivingEntity hurtOwner) {
-        Predicate<Entity> healer = a -> hasSameOwnerAs((LivingEntity) a, hurtOwner)
+        Predicate<Entity> healer = a -> couldBeTamed(a) && hasSameOwnerAs((LivingEntity) a, hurtOwner)
                 && hasEnchant((LivingEntity) a, DIEnchantmentKeys.HEALING_AURA) && getHealingAuraTime((LivingEntity) a) == 0;
         return hurtOwner.level().getEntitiesOfClass(LivingEntity.class,
                 hurtOwner.getBoundingBox().inflate(16, 4, 16), EntitySelector.NO_SPECTATORS.and(healer));

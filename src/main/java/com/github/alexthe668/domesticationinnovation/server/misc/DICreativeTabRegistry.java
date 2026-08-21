@@ -5,9 +5,12 @@ import com.github.alexthe668.domesticationinnovation.server.item.CustomTabBehavi
 import com.github.alexthe668.domesticationinnovation.server.item.DIItemRegistry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
@@ -19,7 +22,7 @@ public class DICreativeTabRegistry {
     public static final Supplier<CreativeModeTab> TAB = DEF_REG.register(DomesticationMod.MODID, () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup." + DomesticationMod.MODID))
             .icon(() -> new ItemStack(DIItemRegistry.COLLAR_TAG.get()))
-            .displayItems((enabledFeatures, output) -> {
+            .displayItems((parameters, output) -> {
                 for (Supplier<Item> item : DIItemRegistry.DEF_REG.getEntries().stream().map(e -> (Supplier<Item>) e).toList()) {
                     Item resolved = item.get();
                     if (resolved instanceof CustomTabBehavior customTabBehavior) {
@@ -28,9 +31,12 @@ public class DICreativeTabRegistry {
                         output.accept(resolved);
                     }
                 }
-                // Note: Enchanted books for pet enchantments should be added via
-                // data-driven enchantment tags or a BuildCreativeModeTabContentsEvent listener
-                // that queries the enchantment registry for our namespace.
+                parameters.holders().lookup(Registries.ENCHANTMENT).ifPresent(registry -> registry.listElements().forEach(holder -> {
+                    ResourceLocation loc = holder.key().location();
+                    if (loc.getNamespace().equals(DomesticationMod.MODID) && DomesticationMod.CONFIG.isEnchantEnabled(loc.getPath())) {
+                        output.accept(EnchantedBookItem.createForEnchantment(new EnchantmentInstance(holder, holder.value().getMaxLevel())));
+                    }
+                }));
             })
             .build());
 }

@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 
 import java.util.List;
+import java.util.function.Function;
 
 public class DIRenderTypes extends RenderType {
     protected static final RenderStateShard.TexturingStateShard IFRAME_TEXTURING = new RenderStateShard.TexturingStateShard("entity_glint_texturing", () -> {
@@ -46,9 +47,15 @@ public class DIRenderTypes extends RenderType {
         super(p_173178_, p_173179_, p_173180_, p_173181_, p_173182_, p_173183_, p_173184_, p_173185_);
     }
 
+    private static final Function<ZombieOverlayKey, RenderType> ZOMBIE_OVERLAY = Util.memoize(key ->
+            create("zombie_overlay", DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS, 256, true, true, RenderType.CompositeState.builder().setShaderState(RENDERTYPE_ENTITY_GLINT_SHADER)
+                    .setTextureState(new RenderStateShard.TextureStateShard(ResourceLocation.parse(DomesticationMod.MODID + ":textures/zombie_overlay.png"), false, false)).setWriteMaskState(COLOR_DEPTH_WRITE).setCullState(NO_CULL).setDepthTestState(EQUAL_DEPTH_TEST).setTransparencyState(TRANSLUCENT_TRANSPARENCY).setTexturingState(new ZombieTexturing("zombie", key.x(), key.y())).setOverlayState(OVERLAY).createCompositeState(true)));
+
     public static RenderType getZombieOverlay(ResourceLocation texture, int x, int y) {
-        return create("zombie_overlay", DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS, 256, true, true, RenderType.CompositeState.builder().setShaderState(RENDERTYPE_ENTITY_GLINT_SHADER)
-                .setTextureState(new RenderStateShard.TextureStateShard(ResourceLocation.parse(DomesticationMod.MODID + ":textures/zombie_overlay.png"), false, false)).setWriteMaskState(COLOR_DEPTH_WRITE).setCullState(NO_CULL).setDepthTestState(EQUAL_DEPTH_TEST).setTransparencyState(TRANSLUCENT_TRANSPARENCY).setTexturingState(new ZombieTexturing("zombie", x, y)).setOverlayState(OVERLAY).createCompositeState(true));
+        return ZOMBIE_OVERLAY.apply(new ZombieOverlayKey(texture, x, y));
+    }
+
+    private record ZombieOverlayKey(ResourceLocation texture, int x, int y) {
     }
 
     private static RenderType translucentNoCull(){

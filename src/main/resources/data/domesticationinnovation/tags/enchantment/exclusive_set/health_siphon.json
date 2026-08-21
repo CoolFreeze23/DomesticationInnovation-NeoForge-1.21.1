@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "domesticationinnovation:gluttonous",
+    "domesticationinnovation:healing_aura",
+    "domesticationinnovation:health_boost",
+    "domesticationinnovation:rejuvenation",
+    "domesticationinnovation:vampire"
+  ]
+}

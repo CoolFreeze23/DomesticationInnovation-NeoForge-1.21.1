@@ -65,13 +65,10 @@ public class DomesticationMod {
         DIVillagePieceRegistry.DEF_REG.register(modEventBus);
         // Note: Enchantments are now data-driven in 1.21.1 - see data/domesticationinnovation/enchantment/
 
-        NeoForge.EVENT_BUS.register(new CommonProxy());
-
-        if (FMLEnvironment.dist == Dist.CLIENT) {
-            ClientProxy clientProxy = (ClientProxy) PROXY;
-            NeoForge.EVENT_BUS.addListener(clientProxy::renderNametagEvent);
-            NeoForge.EVENT_BUS.addListener(clientProxy::onAttackEntityFromClient);
-        }
+        // Register the single proxy instance - on the client this is the ClientProxy,
+        // so its @SubscribeEvent handlers (nametag rendering, swing-through) register too
+        NeoForge.EVENT_BUS.register(PROXY);
+        NeoForge.EVENT_BUS.register(new DIPetDataTrackingHandler());
 
         PROXY.init();
     }

@@ -3,6 +3,7 @@
     "translate": "enchantment.domesticationinnovation.magnetic"
   },
   "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/magnetic",
   "weight": 2,
   "max_level": 1,
   "min_cost": {
@@ -11,7 +12,7 @@
   },
   "max_cost": {
     "base": 16,
-    "per_level_above_first": 11
+    "per_level_above_first": 10
   },
   "anvil_cost": 4,
   "slots": [

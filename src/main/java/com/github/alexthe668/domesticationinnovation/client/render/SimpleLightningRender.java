@@ -9,29 +9,74 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Simple lightning bolt renderer replacing Citadel's LightningRender.
  * Draws jagged electric arcs between two 3D points.
+ *
+ * Like Citadel, bolts are persistent: updateBolt spawns a bolt that keeps its jitter shape
+ * for its lifespan and fades out, while renderBolt draws it every frame. Repeated updateBolt
+ * calls on a live bolt refresh its endpoints so the arc follows moving entities.
  */
 public class SimpleLightningRender {
 
+    private static final Map<Integer, Bolt> ACTIVE_BOLTS = new HashMap<>();
+
     /**
-     * Render a lightning bolt between two world positions.
+     * Spawn a bolt for the given source entity, or refresh the existing one if it is still alive.
+     * A live bolt keeps its seed and spawn time (so the jitter shape and fade stay stable), but
+     * its endpoints are updated to the current positions so the arc tracks moving entities, the
+     * way Citadel's per-frame bolts re-anchored. Once the lifespan runs out, a call to this
+     * method spawns a fresh bolt.
      *
-     * @param from       Start position (world space)
-     * @param to         End position (world space)
-     * @param color      RGBA color vector
-     * @param width      Line thickness
-     * @param segments   Number of segments in the bolt
-     * @param jitter     Random displacement per segment
-     * @param seed       Random seed for deterministic rendering
-     * @param poseStack  Current pose stack (should be translated to world origin)
-     * @param buffer     Buffer source
-     * @param light      Packed light value
+     * @param sourceId Entity id of the bolt's source (used as the bolt key)
+     * @param gameTime Current level game time
+     * @param from     Start position (world space)
+     * @param to       End position (world space)
+     * @param color    RGBA color vector
+     * @param width    Line thickness
+     * @param segments Number of segments in the bolt
+     * @param jitter   Random displacement per segment
+     * @param lifespan Bolt lifetime in ticks; the bolt fades out over this window
      */
-    public static void renderBolt(Vec3 from, Vec3 to, Vector4f color, float width,
-                                   int segments, float jitter, long seed,
-                                   PoseStack poseStack, MultiBufferSource buffer, int light) {
+    public static void updateBolt(int sourceId, long gameTime, Vec3 from, Vec3 to, Vector4f color,
+                                  float width, int segments, float jitter, int lifespan) {
+        ACTIVE_BOLTS.values().removeIf(bolt -> gameTime - bolt.spawnTime() >= bolt.lifespan());
+        Bolt existing = ACTIVE_BOLTS.get(sourceId);
+        if (existing == null) {
+            ACTIVE_BOLTS.put(sourceId, new Bolt(from, to, color, width, segments, jitter,
+                    sourceId * 31L + gameTime, lifespan, gameTime));
+        } else {
+            ACTIVE_BOLTS.put(sourceId, new Bolt(from, to, color, width, segments, jitter,
+                    existing.seed(), existing.lifespan(), existing.spawnTime()));
+        }
+    }
+
+    /**
+     * Render the live bolt for the given source entity, if any. The bolt's shape is stable
+     * for its whole lifespan and its alpha fades linearly to zero.
+     */
+    public static void renderBolt(int sourceId, long gameTime, float partialTicks,
+                                  PoseStack poseStack, MultiBufferSource buffer, int light) {
+        Bolt bolt = ACTIVE_BOLTS.get(sourceId);
+        if (bolt == null) {
+            return;
+        }
+        float age = gameTime - bolt.spawnTime() + partialTicks;
+        if (age >= bolt.lifespan()) {
+            ACTIVE_BOLTS.remove(sourceId);
+            return;
+        }
+        float fade = 1.0F - age / bolt.lifespan();
+        drawBolt(bolt.from(), bolt.to(), bolt.color(), bolt.width(), bolt.segments(), bolt.jitter(), bolt.seed(),
+                fade, poseStack, buffer, light);
+    }
+
+    private static void drawBolt(Vec3 from, Vec3 to, Vector4f color, float width,
+                                 int segments, float jitter, long seed, float fade,
+                                 PoseStack poseStack, MultiBufferSource buffer, int light) {
         VertexConsumer consumer = buffer.getBuffer(RenderType.lightning());
         Matrix4f matrix = poseStack.last().pose();
         RandomSource random = RandomSource.create(seed);
@@ -70,7 +115,7 @@ public class SimpleLightningRender {
         int r = (int) (color.x * 255);
         int g = (int) (color.y * 255);
         int b = (int) (color.z * 255);
-        int a = (int) (color.w * 255);
+        int a = (int) (color.w * fade * 255);
 
         for (int i = 0; i < segments; i++) {
             Vec3 p1 = points[i];
@@ -87,5 +132,9 @@ public class SimpleLightningRender {
             consumer.addVertex(matrix, (float) (p2.x + offset.x), (float) (p2.y + offset.y), (float) (p2.z + offset.z))
                     .setColor(r, g, b, a);
         }
+    }
+
+    private record Bolt(Vec3 from, Vec3 to, Vector4f color, float width, int segments,
+                        float jitter, long seed, int lifespan, long spawnTime) {
     }
 }

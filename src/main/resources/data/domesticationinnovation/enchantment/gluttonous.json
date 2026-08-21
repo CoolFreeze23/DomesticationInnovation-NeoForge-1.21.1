@@ -3,6 +3,7 @@
     "translate": "enchantment.domesticationinnovation.gluttonous"
   },
   "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/gluttonous",
   "weight": 10,
   "max_level": 1,
   "min_cost": {
@@ -10,10 +11,10 @@
     "per_level_above_first": 4
   },
   "max_cost": {
-    "base": 9,
-    "per_level_above_first": 4
+    "base": 16,
+    "per_level_above_first": 10
   },
-  "anvil_cost": 2,
+  "anvil_cost": 1,
   "slots": [
     "mainhand"
   ]

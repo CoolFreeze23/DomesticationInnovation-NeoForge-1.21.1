@@ -53,7 +53,7 @@ public abstract class CatMixin extends TamableAnimal implements ModifedToBeTamea
     )
     private void di_readAdditional(CompoundTag compoundNBT, CallbackInfo ci) {
         if (compoundNBT.contains("DICommand")) {
-            this.setCommand(compoundNBT.getInt("DICommand"));
+            this.entityData.set(COMMAND, compoundNBT.getInt("DICommand"));
         }
     }
 
@@ -82,8 +82,6 @@ public abstract class CatMixin extends TamableAnimal implements ModifedToBeTamea
 
     public void setCommand(int i){
         this.entityData.set(COMMAND, i);
-        this.setOrderedToSit(i == 1);
-        this.setInSittingPose(i == 1);
     }
 
     public void sendCommandMessage(Player owner, int command, Component name) {

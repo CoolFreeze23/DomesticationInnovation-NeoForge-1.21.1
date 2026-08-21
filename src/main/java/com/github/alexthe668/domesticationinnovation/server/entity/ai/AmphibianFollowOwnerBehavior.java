@@ -13,6 +13,8 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.MemoryStatus;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 
 
 public class AmphibianFollowOwnerBehavior<T extends Animal> extends Behavior<T> {
@@ -24,7 +26,7 @@ public class AmphibianFollowOwnerBehavior<T extends Animal> extends Behavior<T> 
     private LivingEntity owner;
 
     public AmphibianFollowOwnerBehavior(float baseSpeedLand, float baseSpeedWater) {
-        super(ImmutableMap.of(MemoryModuleType.WALK_TARGET, MemoryStatus.REGISTERED, MemoryModuleType.LOOK_TARGET, MemoryStatus.REGISTERED), 200);
+        super(ImmutableMap.of(MemoryModuleType.WALK_TARGET, MemoryStatus.REGISTERED, MemoryModuleType.LOOK_TARGET, MemoryStatus.REGISTERED), 20);
         this.baseSpeedLand = baseSpeedLand;
         this.baseSpeedWater = baseSpeedWater;
    }
@@ -91,11 +93,11 @@ public class AmphibianFollowOwnerBehavior<T extends Animal> extends Behavior<T> 
     }
 
     private boolean canTeleportTo(T axolotl, BlockPos pos) {
-        net.minecraft.world.level.block.state.BlockState belowState = axolotl.level().getBlockState(pos.below());
-        boolean isWalkable = !belowState.isAir();
         if(axolotl.level().getFluidState(pos).is(Fluids.WATER)){
             return true;
-        }else if (!isWalkable) {
+        }
+        PathType pathType = WalkNodeEvaluator.getPathTypeStatic(axolotl, pos.mutable());
+        if (pathType != PathType.WALKABLE) {
             return false;
         } else {
             BlockPos blockpos = pos.subtract(axolotl.blockPosition());

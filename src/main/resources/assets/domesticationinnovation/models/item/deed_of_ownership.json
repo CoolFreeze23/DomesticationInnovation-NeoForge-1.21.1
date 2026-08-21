@@ -6,7 +6,7 @@
     "overrides": [
         {
             "predicate": {
-                "bound": 1
+                "domesticationinnovation:bound": 1
             },
             "model": "domesticationinnovation:item/deed_of_ownership_bound"
         }
