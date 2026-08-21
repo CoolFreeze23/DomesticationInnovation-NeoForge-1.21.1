@@ -799,6 +799,7 @@ public class CommonProxy {
                     recallBall.setOwnerUUID(ownerUUID);
                     CompoundTag tag = new CompoundTag();
                     event.getEntity().addAdditionalSaveData(tag);
+                    DIAttachments.writePetDataTo(event.getEntity(), tag);
                     recallBall.setContainedData(tag);
                     recallBall.setContainedEntityType(BuiltInRegistries.ENTITY_TYPE.getKey(event.getEntity().getType()).toString());
                     recallBall.setPos(event.getEntity().getX(),
@@ -946,6 +947,7 @@ public class CommonProxy {
         if (bedPos != null) {
             CompoundTag data = new CompoundTag();
             event.getEntity().addAdditionalSaveData(data);
+            DIAttachments.writePetDataTo(event.getEntity(), data);
             String saveName = event.getEntity().hasCustomName() ? event.getEntity().getCustomName().getString() : "";
             String entityTypeKey = BuiltInRegistries.ENTITY_TYPE.getKey(event.getEntity().getType()).toString();
             RespawnRequest request = new RespawnRequest(entityTypeKey, TameableUtils.getPetBedDimension(event.getEntity()),
@@ -981,8 +983,10 @@ public class CommonProxy {
         int id = zombieCopy.getId();
         CompoundTag livingNbt = new CompoundTag();
         mob.addAdditionalSaveData(livingNbt);
+        DIAttachments.writePetDataTo(mob, livingNbt);
         livingNbt.putString("DeathLootTable", BuiltInLootTables.EMPTY.location().toString());
         zombieCopy.readAdditionalSaveData(livingNbt);
+        DIAttachments.readPetDataFrom(zombieCopy, livingNbt);
         zombieCopy.setId(id);
 
         // Clear tame status

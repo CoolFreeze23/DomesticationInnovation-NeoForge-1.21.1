@@ -96,6 +96,7 @@ public class RecallBallEntity extends Entity {
                     Entity entity = type.create(level());
                     if(entity instanceof LivingEntity alive){
                         alive.readAdditionalSaveData(this.getContainedData());
+                        DIAttachments.readPetDataFrom(alive, this.getContainedData());
                         alive.setHealth(Math.max(2, alive.getMaxHealth() * 0.25F));
                         alive.setYRot(random.nextFloat() * 360 - 180);
                         alive.copyPosition(this);

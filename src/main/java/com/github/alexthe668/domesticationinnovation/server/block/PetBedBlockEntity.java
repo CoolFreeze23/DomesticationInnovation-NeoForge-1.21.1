@@ -1,4 +1,5 @@
 package com.github.alexthe668.domesticationinnovation.server.block;
+import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
@@ -59,6 +60,7 @@ public class PetBedBlockEntity extends BlockEntity {
             Entity entity = type.create(level);
             if(entity instanceof LivingEntity living){
                 living.readAdditionalSaveData(request.getEntityData());
+                DIAttachments.readPetDataFrom(living, request.getEntityData());
                 living.setPos(Vec3.upFromBottomCenterOf(pos, 0.8F));
                 living.setHealth(living.getMaxHealth());
                 if(!request.getNametag().isEmpty()){

@@ -60,4 +60,26 @@ public class DIAttachments {
         CompoundTag existing = entity.getExistingData(PET_DATA).orElse(null);
         return existing == null ? new CompoundTag() : existing;
     }
+
+    private static final String SNAPSHOT_KEY = "DIPetData";
+
+    /**
+     * Attachment data is serialized only by {@code Entity.saveWithoutId}, so
+     * snapshots built with {@code addAdditionalSaveData} (pet bed respawn,
+     * recall ball, zombie pets) lose the collar unless it is carried
+     * explicitly. These two are the carry path: call write after taking the
+     * snapshot and read after rebuilding from it.
+     */
+    public static void writePetDataTo(LivingEntity entity, CompoundTag snapshot) {
+        CompoundTag pet = readPetData(entity);
+        if (!pet.isEmpty()) {
+            snapshot.put(SNAPSHOT_KEY, pet.copy());
+        }
+    }
+
+    public static void readPetDataFrom(LivingEntity entity, CompoundTag snapshot) {
+        if (snapshot.contains(SNAPSHOT_KEY)) {
+            entity.setData(PET_DATA, snapshot.getCompound(SNAPSHOT_KEY).copy());
+        }
+    }
 }
