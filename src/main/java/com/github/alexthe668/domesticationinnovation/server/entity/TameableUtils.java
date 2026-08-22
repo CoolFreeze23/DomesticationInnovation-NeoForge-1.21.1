@@ -643,9 +643,12 @@ public class TameableUtils {
     // Pet bed
     // =========================================================================
 
+    // Read-only queries (also hit client-side per tick by the Jade overlay), so
+    // they must not attach a tag to entities that have none - an absent tag
+    // reads the same as HAS_PET_BED=false / default dimension
     @Nullable
     public static BlockPos getPetBedPos(LivingEntity e) {
-        CompoundTag tag = getPetTag(e);
+        CompoundTag tag = DIAttachments.readPetData(e);
         if (tag.getBoolean(HAS_PET_BED) && tag.contains(PET_BED_X) && tag.contains(PET_BED_Y) && tag.contains(PET_BED_Z)) {
             return new BlockPos(tag.getInt(PET_BED_X), tag.getInt(PET_BED_Y), tag.getInt(PET_BED_Z));
         }
@@ -666,7 +669,7 @@ public class TameableUtils {
     }
 
     public static String getPetBedDimension(LivingEntity e) {
-        CompoundTag tag = getPetTag(e);
+        CompoundTag tag = DIAttachments.readPetData(e);
         return tag.contains(PET_BED_DIMENSION) ? tag.getString(PET_BED_DIMENSION) : "minecraft:overworld";
     }
 

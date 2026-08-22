@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.client.tooltip;
 
+import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
 import com.mojang.datafixers.util.Either;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -22,12 +23,6 @@ import javax.annotation.Nullable;
 public record PetSnapshotTooltip(ResourceLocation entityTypeId, CompoundTag snapshot) implements TooltipComponent {
 
     /**
-     * Same key DIAttachments.writePetDataTo stamps into entity snapshots; kept
-     * private over there so every write funnels through the carry helpers.
-     */
-    private static final String PET_SNAPSHOT_KEY = "DIPetData";
-
-    /**
      * Game-bus listener appending the preview to tooltips of snapshot-carrying
      * stacks. Registered from ClientProxy.clientInit.
      */
@@ -41,12 +36,12 @@ public record PetSnapshotTooltip(ResourceLocation entityTypeId, CompoundTag snap
     @Nullable
     private static PetSnapshotTooltip fromStack(ItemStack stack) {
         CompoundTag entityData = stack.getOrDefault(DataComponents.ENTITY_DATA, CustomData.EMPTY).getUnsafe();
-        if (entityData.contains(PET_SNAPSHOT_KEY)) {
+        if (entityData.contains(DIAttachments.SNAPSHOT_KEY)) {
             ResourceLocation typeId = ResourceLocation.tryParse(entityData.getString("id"));
             return typeId == null ? null : new PetSnapshotTooltip(typeId, entityData);
         }
         CompoundTag bucketData = stack.getOrDefault(DataComponents.BUCKET_ENTITY_DATA, CustomData.EMPTY).getUnsafe();
-        if (bucketData.contains(PET_SNAPSHOT_KEY) && stack.is(Items.AXOLOTL_BUCKET)) {
+        if (bucketData.contains(DIAttachments.SNAPSHOT_KEY) && stack.is(Items.AXOLOTL_BUCKET)) {
             // bucket tags carry no "id"; the axolotl is the only bucketable pet
             return new PetSnapshotTooltip(BuiltInRegistries.ENTITY_TYPE.getKey(EntityType.AXOLOTL), bucketData);
         }

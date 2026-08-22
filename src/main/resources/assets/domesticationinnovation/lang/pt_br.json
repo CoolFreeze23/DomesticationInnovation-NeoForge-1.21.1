@@ -144,7 +144,7 @@
   "domesticationinnovation.configuration.pet_roaming_radius": "Raio de Passeio do Pet",
   "domesticationinnovation.configuration.pet_roaming_radius.tooltip": "Pets no modo vaguear ficam a até esta distância em blocos da cama pet reivindicada; use 0 para desativar",
   "domesticationinnovation.configuration.pet_curse_enchantments_loot_only": "Maldições Apenas em Saque",
-  "domesticationinnovation.configuration.pet_curse_enchantments_loot_only.tooltip": "Maldições de pet só aparecem em baús de saque, nunca na mesa de encantamentos",
+  "domesticationinnovation.configuration.pet_curse_enchantments_loot_only.tooltip": "Livros de maldição de pet só aparecem em saque, e não nas trocas de livros do domador de animais (maldições nunca estão disponíveis na mesa de encantamentos)",
   "domesticationinnovation.configuration.sinister_carrot_loot_chance": "Chance da Cenoura Sinistra",
   "domesticationinnovation.configuration.sinister_carrot_loot_chance.tooltip": "Chance do saque da mansão da floresta conter uma cenoura sinistra",
   "domesticationinnovation.configuration.bubbling_loot_chance": "Chance do Livro Borbulhando",

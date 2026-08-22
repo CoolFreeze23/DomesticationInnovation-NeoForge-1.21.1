@@ -186,7 +186,7 @@
   "domesticationinnovation.configuration.pet_roaming_radius": "Pet Roaming Radius",
   "domesticationinnovation.configuration.pet_roaming_radius.tooltip": "Pets in wander mode stay within this many blocks of their claimed pet bed, set to 0 to disable",
   "domesticationinnovation.configuration.pet_curse_enchantments_loot_only": "Curse Enchantments Loot Only",
-  "domesticationinnovation.configuration.pet_curse_enchantments_loot_only.tooltip": "Pet curse enchantments only appear in loot, and not the enchanting table",
+  "domesticationinnovation.configuration.pet_curse_enchantments_loot_only.tooltip": "Pet curse enchantment books only appear in loot and not in animal tamer book trades (curses are never available in the enchanting table)",
   "domesticationinnovation.configuration.sinister_carrot_loot_chance": "Sinister Carrot Loot Chance",
   "domesticationinnovation.configuration.sinister_carrot_loot_chance.tooltip": "Chance of woodland mansion loot containing a sinister carrot",
   "domesticationinnovation.configuration.bubbling_loot_chance": "Bubbling Loot Chance",

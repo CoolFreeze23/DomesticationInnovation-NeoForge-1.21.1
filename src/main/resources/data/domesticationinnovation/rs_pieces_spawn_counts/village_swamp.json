@@ -5,6 +5,7 @@
       "modid": "repurposed_structures"
     }
   ],
+  "target_structure": "repurposed_structures:village_swamp",
   "pieces_spawn_counts": [
     {
       "nbt_piece_name": "domesticationinnovation:plains_petshop",

@@ -132,6 +132,9 @@ public class ClientProxy extends CommonProxy {
         // Live 3D preview on tooltips of stacks carrying a captured pet
         // snapshot (recall ball pick-items, tamed axolotl buckets)
         NeoForge.EVENT_BUS.addListener(PetSnapshotTooltip::onGatherTooltipComponents);
+        // Drop the preview's cached display entity on logout so it does not
+        // pin the dead ClientLevel for the rest of the game session
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut e) -> PetSnapshotTooltipRenderer.clearCache());
     }
 
     public static void registerTooltipComponents(RegisterClientTooltipComponentFactoriesEvent event) {

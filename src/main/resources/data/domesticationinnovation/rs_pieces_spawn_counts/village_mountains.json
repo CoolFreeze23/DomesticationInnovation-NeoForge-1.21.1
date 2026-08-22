@@ -5,6 +5,7 @@
       "modid": "repurposed_structures"
     }
   ],
+  "target_structure": "repurposed_structures:village_mountains",
   "pieces_spawn_counts": [
     {
       "nbt_piece_name": "domesticationinnovation:taiga_petshop",

@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.client.tooltip;
 
+import com.mojang.blaze3d.platform.Lighting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -38,6 +39,18 @@ public class PetSnapshotTooltipRenderer implements ClientTooltipComponent {
     private static CompoundTag lastSnapshot;
     @Nullable
     private static LivingEntity lastDisplayEntity;
+
+    /**
+     * Drops the cached display entity - and, through Entity.level(), the whole
+     * ClientLevel it retains - on logout. Without this a player who hovered a
+     * snapshot and then disconnected would pin the dead level until another
+     * snapshot is hovered in a new world. Registered against
+     * ClientPlayerNetworkEvent.LoggingOut in ClientProxy.clientInit.
+     */
+    public static void clearCache() {
+        lastSnapshot = null;
+        lastDisplayEntity = null;
+    }
 
     @Nullable
     private final LivingEntity displayEntity;
@@ -121,6 +134,13 @@ public class PetSnapshotTooltipRenderer implements ClientTooltipComponent {
         } catch (Exception e) {
             // renderer choked on the static display entity - forget it rather than fail every frame
             lastDisplayEntity = null;
+            // the vanilla method aborted between setRenderShadow(false)/
+            // setupForEntityInInventory() and their restores; repair the leaked
+            // global state or shadows stay off for the rest of the session (the
+            // unbalanced pushPose is confined to the per-frame GuiGraphics pose
+            // stack and self-heals next frame)
+            Minecraft.getInstance().getEntityRenderDispatcher().setRenderShadow(true);
+            Lighting.setupFor3DItems();
         } finally {
             guiGraphics.disableScissor();
         }

@@ -107,7 +107,7 @@ public class DIConfig {
         builder.pop();
 
         builder.push("loot");
-        petCurseEnchantmentsLootOnly = builder.comment("true if pet curse enchantments should only appear in loot, and not the enchanting table").define("pet_curse_enchantments_loot_only", true);
+        petCurseEnchantmentsLootOnly = builder.comment("true if pet curse enchantment books should only appear in loot and not in animal tamer book trades (curses are never available in the enchanting table)").define("pet_curse_enchantments_loot_only", true);
         sinisterCarrotLootChance = builder.comment("chance of woodland mansion loot containing sinister carrot").defineInRange("sinister_carrot_loot_chance", 0.3D, 0.0, 1.0D);
         bubblingLootChance = builder.comment("chance of buried treasure loot containing Bubbling book").defineInRange("bubbling_loot_chance", 0.65D, 0.0, 1.0D);
         vampirismLootChance = builder.comment("chance of woodland mansion loot containing Vampire book").defineInRange("vampirism_loot_chance", 0.22D, 0.0, 1.0D);

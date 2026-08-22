@@ -25,6 +25,8 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.neoforged.neoforge.attachment.AttachmentHolder;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 import javax.annotation.Nullable;
 import java.util.Optional;
@@ -75,6 +77,19 @@ public class RecallBallEntity extends Entity {
         ItemStack stack = new ItemStack(egg);
         CompoundTag snapshot = this.getContainedData().copy();
         snapshot.putString("id", this.getContainedEntityType());
+        // The collar data rides under the DIPetData carry key, which vanilla
+        // Entity.load ignores - an egg-spawned pet would lose every collar
+        // enchantment. Mirror it into NeoForge's attachment save format
+        // ("neoforge:attachments" keyed by the attachment type id), which
+        // Entity.load does restore, exactly as a normal save round-trip would.
+        // The carry key stays too, for our own readers (tooltip preview,
+        // readPetDataFrom).
+        if (snapshot.contains(DIAttachments.SNAPSHOT_KEY)) {
+            CompoundTag attachments = snapshot.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY);
+            attachments.put(NeoForgeRegistries.ATTACHMENT_TYPES.getKey(DIAttachments.PET_DATA.get()).toString(),
+                    snapshot.getCompound(DIAttachments.SNAPSHOT_KEY).copy());
+            snapshot.put(AttachmentHolder.ATTACHMENTS_NBT_KEY, attachments);
+        }
         stack.set(DataComponents.ENTITY_DATA, CustomData.of(snapshot));
         return stack;
     }
