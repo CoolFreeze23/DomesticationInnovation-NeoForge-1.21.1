@@ -28,7 +28,13 @@ public class LanternRequest {
 
     // per-request retrieval state, rebuilt each session (never persisted)
     private boolean chunksForced;
+    // set while a lantern is actively servicing this request, so a second lantern
+    // within range of the same owner never adopts the same request concurrently
+    private boolean taken;
+    // ticks the pet stayed absent while its forced chunks were fully entity-ticking
     private int ticksWaited;
+    // every tick since pickup, loaded chunks or not; drives the give-up hard cap
+    private int totalTicksWaited;
 
     public LanternRequest(UUID petUUID, String entityType, UUID ownerUUID, BlockPos chunkPosition, long timestamp, String nametag) {
         this(petUUID, entityType, ownerUUID, chunkPosition, timestamp, nametag, "", null);
@@ -98,12 +104,43 @@ public class LanternRequest {
         this.chunksForced = chunksForced;
     }
 
+    public boolean isTaken() {
+        return this.taken;
+    }
+
+    public void setTaken(boolean taken) {
+        this.taken = taken;
+    }
+
     /**
-     * Counts one tick spent waiting for the pet's chunks to produce the entity.
-     * Returns the total ticks waited so far for this request.
+     * Counts one tick the pet stayed absent while its forced chunks were fully
+     * entity-ticking. Only these ticks count toward the retrieval timeout -
+     * absence from a chunk that has not finished loading proves nothing.
      */
     public int tickWaitTime() {
         return ++this.ticksWaited;
+    }
+
+    public int getTicksWaited() {
+        return this.ticksWaited;
+    }
+
+    /**
+     * Counts one tick since this request was picked up, whether or not its
+     * chunks have loaded; drives the hard cap that eventually abandons a
+     * permanently unloadable chunk.
+     */
+    public int tickTotalWaitTime() {
+        return ++this.totalTicksWaited;
+    }
+
+    /**
+     * Clears the per-attempt wait counters when a lantern hands this request
+     * back to the pool uncompleted, so the next lantern gets a fresh window.
+     */
+    public void resetRetrievalTicks() {
+        this.ticksWaited = 0;
+        this.totalTicksWaited = 0;
     }
 
     public String toString(){

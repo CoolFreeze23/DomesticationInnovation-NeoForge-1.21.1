@@ -188,6 +188,17 @@ public class CommonProxy {
      * first, so config changes and power-multiplier tweaks take effect on load
      * and stale values never accumulate in entity NBT. The amounts must stay in
      * step with the ones applied when a collar is updated (TameableUtils).
+     *
+     * <p>Health policy: the boost modifiers are transient, so the saved "Health"
+     * value was already clamped to the modifier-less base max by vanilla before
+     * this event fired. Scaling health UP by the pre/post fraction here would
+     * therefore full-heal or inflate the pet on every reload; instead, when max
+     * grows we leave health untouched and let the SafePetHealth floor applied
+     * by {@link #onEntityJoinLevel} restore the true pre-save health. Only when
+     * max SHRINKS (enchant removed/disabled offline, power multiplier lowered,
+     * or stale permanent modifiers dropped from a legacy save - the one case
+     * where the pre-reapply max reflected the true boosted max) do we preserve
+     * the bar's fill fraction.
      */
     private void refreshEnchantAttributeModifiers(LivingEntity living) {
         AttributeInstance health = living.getAttribute(Attributes.MAX_HEALTH);
@@ -223,9 +234,12 @@ public class CommonProxy {
             }
         }
 
-        // Keep the health bar at the same fill level when max health shifts
-        if (health != null && living.getMaxHealth() != oldMax) {
-            living.setHealth(healthFraction * living.getMaxHealth());
+        // Only the shrink case keeps the fill fraction (see javadoc above);
+        // growth is restored to the exact saved health via the SafePetHealth
+        // floor at the join site, never by scaling the clamped loaded value
+        float newMax = living.getMaxHealth();
+        if (health != null && living.isAlive() && newMax > 0 && newMax < oldMax) {
+            living.setHealth(Mth.clamp(healthFraction * newMax, 1.0F, newMax));
         }
     }
 
@@ -260,6 +274,22 @@ public class CommonProxy {
         }
         if (TameableUtils.couldBeTamed(living) && TameableUtils.hasEnchant(living, DIEnchantmentKeys.HEALTH_BOOST)) {
             TameableUtils.setSafePetHealth(living, living.getHealth());
+        }
+    }
+
+    /**
+     * Removes any queued wayward-lantern retrieval requests for the given pet
+     * UUID. Must be called whenever a pet's data leaves the world through a
+     * path that will never re-join under the same UUID - death, total-recall
+     * capture, bucket pickup - because a stale request carries a full entity
+     * snapshot that the lantern timeout would otherwise use to rebuild a second
+     * copy of the pet along with its enchanted collar.
+     */
+    public static void purgeLanternRequests(Level level, UUID petUUID) {
+        if (level == null || level.isClientSide) return;
+        DIWorldData data = DIWorldData.get(level);
+        if (data != null) {
+            data.removeMatchingLanternRequests(petUUID);
         }
     }
 
@@ -906,6 +936,9 @@ public class CommonProxy {
                     recallBall.setInvulnerable(true);
                     event.getEntity().stopRiding();
                     if (event.getEntity().level().addFreshEntity(recallBall)) {
+                        // Ball release rebuilds the pet under a NEW UUID, so any
+                        // lantern request snapshotted for the old one is stale
+                        purgeLanternRequests(event.getEntity().level(), event.getEntity().getUUID());
                         event.getEntity().discard();
                     }
                     event.setCanceled(true);
@@ -1039,8 +1072,15 @@ public class CommonProxy {
     public void onLivingDeath(LivingDeathEvent event) {
         if (!TameableUtils.isTamed(event.getEntity()) || TameableUtils.isZombiePet(event.getEntity())) return;
 
+        // A dead pet never re-joins under its saved UUID (even a bed respawn
+        // builds a fresh entity from the snapshot), so any lantern retrieval
+        // request still queued for it is stale - drop it before its snapshot
+        // can rebuild a duplicate pet carrying a duplicate collar
+        purgeLanternRequests(event.getEntity().level(), event.getEntity().getUUID());
+
         // Pet bed respawn registration
         BlockPos bedPos = TameableUtils.getPetBedPos(event.getEntity());
+        boolean queuedRespawn = false;
         if (bedPos != null && DomesticationMod.CONFIG.petBedRespawns.get()) {
             CompoundTag data = new CompoundTag();
             event.getEntity().addAdditionalSaveData(data);
@@ -1052,19 +1092,23 @@ public class CommonProxy {
             DIWorldData worldData = DIWorldData.get(event.getEntity().level());
             if (worldData != null) {
                 worldData.addRespawnRequest(request);
+                queuedRespawn = true;
             }
-        } else if (bedPos != null) {
+        }
+        if (bedPos != null && !queuedRespawn && !event.getEntity().level().isClientSide) {
             // No respawn coming, so the pet's death frees its bed for another pet
-            if (!event.getEntity().level().isClientSide) {
-                PetBedBlockEntity.releaseClaim(event.getEntity().level(), bedPos, event.getEntity().getUUID());
-            }
-        } else if (DomesticationMod.CONFIG.collarDropsOnDeath.get()
+            PetBedBlockEntity.releaseClaim(event.getEntity().level(), bedPos, event.getEntity().getUUID());
+        }
+        if (!queuedRespawn && DomesticationMod.CONFIG.collarDropsOnDeath.get()
                 && !event.getEntity().level().isClientSide
                 && TameableUtils.hasCollar(event.getEntity())
                 && !willResurrectAsZombiePet(event.getEntity())) {
-            // No bed to respawn from and no zombie copy to inherit the collar
-            // data, so return the collar itself - unless its curse vanishes it
-            Map<ResourceLocation, Integer> enchants = TameableUtils.getEnchants(event.getEntity());
+            // No respawn was queued, so the pet is gone for good whether or not
+            // it had a bed; return the collar itself - unless a zombie copy
+            // inherits the collar data or its curse vanishes it. Rebuild from
+            // the RAW stored enchants so config-disabled ones survive on the
+            // item instead of being silently destroyed.
+            Map<ResourceLocation, Integer> enchants = TameableUtils.getEnchantsRaw(event.getEntity());
             if (enchants == null || !enchants.containsKey(VANISHING_CURSE_ID)) {
                 ItemStack collar = rebuildCollarStack(event.getEntity(), enchants);
                 if (event.getEntity().hasCustomName()) {
@@ -1296,7 +1340,11 @@ public class CommonProxy {
                 return true;
             }
         }
-        if (!sneakBypass && TameableUtils.isTamed(rabbit) && TameableUtils.isPetOf(player, rabbit)) {
+        // Same trinary gate as every mixin species path (WolfMixin, CatMixin,
+        // etc.): without the command system, clicking must not cycle the
+        // hidden command value or spam command overlay messages
+        if (!sneakBypass && DomesticationMod.CONFIG.trinaryCommandSystem.get()
+                && TameableUtils.isTamed(rabbit) && TameableUtils.isPetOf(player, rabbit)) {
             ((ModifedToBeTameable) rabbit).playerSetCommand(player, rabbit);
         }
         return false;
@@ -1305,9 +1353,11 @@ public class CommonProxy {
     private void handleCollarTagApplication(Player player, LivingEntity living, ItemStack stack,
                                             PlayerInteractEvent.EntityInteract event) {
         if (!player.level().isClientSide && living.isAlive()) {
-            // Read enchantments from the collar tag item
+            // Read enchantments from the collar tag item. The pet side reads
+            // the RAW stored list: curse presence must be honored and rebuilt
+            // collars must keep their entries even while config-disabled.
             var itemEnchants = stack.getEnchantments();
-            Map<ResourceLocation, Integer> existingEnchants = TameableUtils.getEnchants(living);
+            Map<ResourceLocation, Integer> existingEnchants = TameableUtils.getEnchantsRaw(living);
 
             // A collar bound by its curse cannot be swapped off the pet; refuse
             // without consuming the new tag
@@ -1327,9 +1377,12 @@ public class CommonProxy {
             // same enchantments) is a no-op - don't consume the item
             if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME)
                     && living.hasCustomName() && stack.getHoverName().equals(living.getCustomName())) {
-                boolean hasSameEnchants = itemEnchants.isEmpty();
-                if (existingEnchants != null) {
-                    hasSameEnchants = true;
+                // "Identical" requires the same SET of enchants, not just that
+                // every item enchant matches: a same-named collar carrying a
+                // strict subset (or none at all) is a legitimate downgrade swap
+                int existingCount = existingEnchants == null ? 0 : existingEnchants.size();
+                boolean hasSameEnchants = existingCount == itemEnchants.size();
+                if (hasSameEnchants && existingEnchants != null) {
                     for (var entry : itemEnchants.entrySet()) {
                         ResourceLocation enchantId = entry.getKey().unwrapKey()
                                 .map(net.minecraft.resources.ResourceKey::location)

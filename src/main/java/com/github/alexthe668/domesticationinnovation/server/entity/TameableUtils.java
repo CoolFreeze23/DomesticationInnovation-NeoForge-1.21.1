@@ -337,8 +337,30 @@ public class TameableUtils {
         return getEnchantLevel(entity, enchantmentKey) > 0;
     }
 
+    /**
+     * Config-filtered view of the pet's stored collar enchantments: entries for
+     * config-disabled enchants are hidden. Use this at behavior/effect sites
+     * only. Sites that REBUILD a collar item or check curse presence must use
+     * {@link #getEnchantsRaw} instead, or temporarily disabled enchants would
+     * be permanently stripped from the returned item (and disabled curses
+     * would silently stop gating drops/swaps while still stored on the pet).
+     */
     @Nullable
     public static Map<ResourceLocation, Integer> getEnchants(LivingEntity entity) {
+        return getEnchants(entity, true);
+    }
+
+    /**
+     * Raw, unfiltered view of the pet's stored collar enchantments, including
+     * config-disabled ones. See {@link #getEnchants} for when each applies.
+     */
+    @Nullable
+    public static Map<ResourceLocation, Integer> getEnchantsRaw(LivingEntity entity) {
+        return getEnchants(entity, false);
+    }
+
+    @Nullable
+    private static Map<ResourceLocation, Integer> getEnchants(LivingEntity entity, boolean filterDisabled) {
         ListTag listTag = getEnchantmentList(entity);
         if (listTag == null) return null;
 
@@ -347,7 +369,7 @@ public class TameableUtils {
             CompoundTag entry = listTag.getCompound(i);
             String id = entry.getString("id");
             ResourceLocation loc = ResourceLocation.tryParse(id);
-            if (loc != null && DomesticationMod.CONFIG.isEnchantEnabled(loc.getPath())) {
+            if (loc != null && (!filterDisabled || DomesticationMod.CONFIG.isEnchantEnabled(loc.getPath()))) {
                 enchants.put(loc, entry.getInt("lvl"));
             }
         }
@@ -426,6 +448,14 @@ public class TameableUtils {
     }
 
     private static void onUpdateEnchants(@Nullable Map<ResourceLocation, Integer> prevEnchants, LivingEntity entity) {
+        // Mid-session collar change: the current max still carries the old
+        // modifiers, so health/max here is the TRUE fill fraction (unlike the
+        // load path in CommonProxy, where the saved health was clamped to the
+        // base max). Preserve that fraction across the modifier swap so a
+        // collar change never full-heals the pet nor leaves health above max.
+        float maxBefore = entity.getMaxHealth();
+        float healthFraction = maxBefore > 0 ? Math.min(entity.getHealth() / maxBefore, 1.0F) : 1.0F;
+
         int healthExtra = getEnchantLevel(entity, DIEnchantmentKeys.HEALTH_BOOST);
         int speedExtra = getEnchantLevel(entity, DIEnchantmentKeys.SPEEDSTER);
         boolean amphib = hasEnchant(entity, DIEnchantmentKeys.AMPHIBIOUS) && !entity.isInWaterOrBubble() && isWaterCreature(entity);
@@ -471,6 +501,12 @@ public class TameableUtils {
             } else {
                 speed.removeModifier(SPEED_BOOST_AQUATIC_LAND_ID);
             }
+        }
+
+        // Keep the health bar at the same TRUE fill level when max shifted
+        float maxAfter = entity.getMaxHealth();
+        if (health != null && entity.isAlive() && maxAfter > 0 && maxAfter != maxBefore) {
+            entity.setHealth(Math.max(1.0F, Math.min(healthFraction * maxAfter, maxAfter)));
         }
     }
 

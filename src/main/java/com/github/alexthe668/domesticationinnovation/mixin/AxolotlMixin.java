@@ -5,6 +5,7 @@ import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTa
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
 import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
 import com.github.alexthe668.domesticationinnovation.server.entity.ai.PetCombatRules;
+import com.github.alexthe668.domesticationinnovation.server.misc.DIWorldData;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
@@ -118,6 +119,17 @@ public abstract class AxolotlMixin extends Animal implements ModifedToBeTameable
             compoundNBT.putUUID("Owner", this.getTameOwnerUUID());
         }
         stack.set(net.minecraft.core.component.DataComponents.BUCKET_ENTITY_DATA, net.minecraft.world.item.component.CustomData.of(compoundNBT));
+        // Bucket pickup discards this entity and the later release spawns a
+        // NEW UUID, so any queued wayward-lantern retrieval request for this
+        // pet can never resolve - purge it here (mirroring the death and
+        // total-recall purges) so a stale request cannot time out and
+        // snapshot-respawn a duplicate pet with a duplicate collar.
+        if (!this.level().isClientSide) {
+            DIWorldData worldData = DIWorldData.get(this.level());
+            if (worldData != null) {
+                worldData.removeMatchingLanternRequests(this.getUUID());
+            }
+        }
     }
 
     @Inject(

@@ -4,6 +4,7 @@ import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.enchantment.DIEnchantmentKeys;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -50,6 +51,19 @@ public abstract class AbstractHorseMixin extends Animal implements ModifedToBeTa
     @Shadow @Nullable public abstract UUID getOwnerUUID();
 
     @Shadow public abstract void setOwnerUUID(@org.jetbrains.annotations.Nullable UUID p_30587_);
+
+    @Inject(
+            at = {@At("TAIL")},
+            remap = true,
+            method = {"Lnet/minecraft/world/entity/animal/horse/AbstractHorse;registerGoals()V"}
+    )
+    private void di_registerGoals(CallbackInfo ci) {
+        // Wired at the same priority as the vanilla stroll goal it constrains
+        // (WaterAvoidingRandomStrollGoal, priority 6 in AbstractHorse). The
+        // goal declares no flags, so the number is cosmetic - it maintains
+        // the bed restriction that stroll position generators respect.
+        this.goalSelector.addGoal(6, new BedAnchoredStrollGoal(this));
+    }
 
     @Inject(
             method = {"Lnet/minecraft/world/entity/animal/horse/AbstractHorse;tickRidden(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/phys/Vec3;)V"},

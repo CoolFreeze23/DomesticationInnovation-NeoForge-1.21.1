@@ -92,6 +92,8 @@ public class DIConfig {
         collarDropsOnDeath = builder.comment("true if a pet with no pet bed drops its collar tag (keeping enchantments and name) when it dies").define("collar_drops_on_death", true);
         sneakBypassesPetInteractions = builder.comment("true if sneaking skips pet command cycling and feeding so vanilla and modded interactions can be reached. Collar tags still apply while sneaking").define("sneak_bypasses_pet_interactions", true);
         collarTagEnchantability = builder.comment("enchantability of the collar tag item. Higher values give better enchanting table offers; 1 matches the original mod").defineInRange("collar_tag_enchantability", 10, 1, 50);
+        // NOTE: tamer_sells_books is intentionally unconsumed for now. The upcoming tamer trade redesign
+        // will gate the animal tamer's random enchanted-book trades on this option; do not remove it as dead config.
         tamerSellsBooks = builder.comment("true if animal tamer villagers sell random pet enchantment books").define("tamer_sells_books", true);
         lanternRequestTimeoutTicks = builder.comment("how many ticks a wayward lantern waits for a pet's chunk to load before abandoning that retrieval").defineInRange("lantern_request_timeout_ticks", 100, 20, 6000);
         lanternCrashSafeRespawn = builder.comment("true if a wayward lantern rebuilds a missing pet from its last saved snapshot when the pet's chunk loads without it").define("lantern_crash_safe_respawn", true);
@@ -100,7 +102,7 @@ public class DIConfig {
         builder.pop();
 
         builder.push("pet_care");
-        injuredPetsStopFighting = builder.comment("true if badly hurt pets refuse to fight anything except hostile mobs and iron golems").define("injured_pets_stop_fighting", true);
+        injuredPetsStopFighting = builder.comment("true if badly hurt pets stop engaging hostile mobs and iron golems so they can retreat and heal").define("injured_pets_stop_fighting", true);
         injuredHealthRatio = builder.comment("fraction of max health at or below which a pet counts as badly hurt").defineInRange("injured_health_ratio", 0.2D, 0.0D, 1.0D);
         disablePetTeleportation = builder.comment("true if pets keep walking toward a faraway owner instead of teleporting to them").define("disable_pet_teleportation", false);
         petRoamingRadius = builder.comment("pets in wander mode stay within this many blocks of their claimed pet bed, set to 0 to disable").defineInRange("pet_roaming_radius", 0, 0, 512);

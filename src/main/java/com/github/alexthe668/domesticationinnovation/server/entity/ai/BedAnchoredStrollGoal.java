@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 
 import javax.annotation.Nullable;
 import java.util.EnumSet;
@@ -74,13 +75,21 @@ public class BedAnchoredStrollGoal extends Goal {
 
     /**
      * The bed position this pet should currently roam around, or null when
-     * roaming does not apply: the radius option is 0, the pet is untamed or
-     * not in wander mode, or it has no claimed bed in its current dimension.
-     * Brain-driven pets that cannot run goals can drive the same
+     * roaming does not apply: the radius option is 0, the pet is untamed,
+     * leashed or not in wander mode, or it has no claimed bed in its current
+     * dimension. Brain-driven pets that cannot run goals can drive the same
      * restrictTo/clearRestriction cycle off this from a tick hook.
      */
     @Nullable
     public static BlockPos getRoamAnchor(Mob mob) {
+        // A stretched leash calls restrictTo(leashHolder, 5) every tick
+        // (PathfinderMob.handleLeashAtDistance) and dropLeash calls
+        // clearRestriction(); bail out entirely while leashed so this goal
+        // stops instead of tug-of-warring the leash anchor, leaving vanilla's
+        // leash restriction authoritative until the goal restarts.
+        if (mob.isLeashed()) {
+            return null;
+        }
         if (DomesticationMod.CONFIG.petRoamingRadius.get() <= 0 || !TameableUtils.isTamed(mob) || !isWandering(mob)) {
             return null;
         }
@@ -89,6 +98,14 @@ public class BedAnchoredStrollGoal extends Goal {
     }
 
     private static boolean isWandering(Mob mob) {
+        if (mob instanceof AbstractHorse) {
+            // Horses implement ModifedToBeTameable without a real command
+            // store: getCommand() always reports the default of 1 ("stay"),
+            // which would leave this goal permanently inert. Treat a horse as
+            // wandering unless something is actually parking it - being
+            // ridden here, or leashed (already excluded in getRoamAnchor).
+            return !mob.isVehicle();
+        }
         if (DomesticationMod.CONFIG.trinaryCommandSystem.get()) {
             int command = TameableUtils.tryGetCommand(mob);
             if (command != -1) {
