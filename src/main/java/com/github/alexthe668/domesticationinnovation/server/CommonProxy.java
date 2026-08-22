@@ -1508,6 +1508,15 @@ public class CommonProxy {
         level5.add(new EnchantItemTrade(DIItemRegistry.COLLAR_TAG.get(), 50, 4, 38, 3, 20));
         level5.add(new SellingEnchantedBook(DIEnchantmentKeys.CHARISMA, 3, 12, 1, 18, 0.02F));
 
+        // The tamer is the dedicated pet-enchant book vendor (librarians no longer roll pet books)
+        if (DomesticationMod.CONFIG.tamerSellsBooks.get()) {
+            level1.add(new SellingRandomPetBook(1));
+            level2.add(new SellingRandomPetBook(5));
+            level3.add(new SellingRandomPetBook(10));
+            level4.add(new SellingRandomPetBook(15));
+            level5.add(new SellingRandomPetBook(15));
+        }
+
         event.getTrades().put(1, level1);
         event.getTrades().put(2, level2);
         event.getTrades().put(3, level3);

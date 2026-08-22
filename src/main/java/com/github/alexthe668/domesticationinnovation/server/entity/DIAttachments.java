@@ -94,7 +94,7 @@ public class DIAttachments {
         return existing == null ? new CompoundTag() : existing;
     }
 
-    private static final String SNAPSHOT_KEY = "DIPetData";
+    public static final String SNAPSHOT_KEY = "DIPetData";
 
     /**
      * Attachment data is serialized only by {@code Entity.saveWithoutId}, so

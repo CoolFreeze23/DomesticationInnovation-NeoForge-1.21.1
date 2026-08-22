@@ -51,12 +51,24 @@ repositories {
     maven {
         url = "https://maven.neoforged.net/releases"
     }
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
+    }
 }
 
 dependencies {
     // Citadel for NeoForge 1.21.1 - update artifact ID when available
     // If no NeoForge Citadel exists, the Citadel functionality has been inlined
     // compileOnly "curse.maven:citadel-331936:XXXXXXX"
+
+    // Jade (optional): compile against it for the entity-overlay plugin in
+    // compat/jade. Those classes are only ever classloaded by Jade's
+    // @WailaPlugin annotation scan, so no runtime dependency results.
+    compileOnly "maven.modrinth:jade:15.10.6+neoforge"
 }
 
 jar {

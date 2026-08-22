@@ -1,0 +1,21 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "repurposed_structures"
+    }
+  ],
+  "target_pool": "repurposed_structures:villages/bamboo/houses",
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 8,
+      "element": {
+        "element_type": "domesticationinnovation:petshop",
+        "location": "domesticationinnovation:plains_petshop",
+        "processors": "repurposed_structures:villages/bamboo/mossify",
+        "projection": "rigid"
+      }
+    }
+  ]
+}

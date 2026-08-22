@@ -1,0 +1,21 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "repurposed_structures"
+    }
+  ],
+  "target_pool": "repurposed_structures:villages/mountains/houses",
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 12,
+      "element": {
+        "element_type": "domesticationinnovation:petshop",
+        "location": "domesticationinnovation:taiga_petshop",
+        "processors": "repurposed_structures:villages/mountains/mossify",
+        "projection": "rigid"
+      }
+    }
+  ]
+}

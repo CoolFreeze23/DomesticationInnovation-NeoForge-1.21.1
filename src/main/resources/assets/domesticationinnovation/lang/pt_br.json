@@ -232,5 +232,8 @@
   "domesticationinnovation.configuration.blight_curse_enabled": "Maldição da Praga",
   "domesticationinnovation.configuration.blight_curse_enabled.tooltip": "Ativa o encantamento de pet Maldição da Praga",
   "domesticationinnovation.configuration.immaturity_curse_enabled": "Maldição da Imaturidade",
-  "domesticationinnovation.configuration.immaturity_curse_enabled.tooltip": "Ativa o encantamento de pet Maldição da Imaturidade"
+  "domesticationinnovation.configuration.immaturity_curse_enabled.tooltip": "Ativa o encantamento de pet Maldição da Imaturidade",
+  "message.domesticationinnovation.jade_pet_bed": "Cama do pet: %s",
+  "config.jade.plugin_domesticationinnovation.pet_enchantments": "Encantamentos do Pet",
+  "config.jade.plugin_domesticationinnovation.pet_bed": "Localização da Cama do Pet"
 }

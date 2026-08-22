@@ -274,5 +274,8 @@
   "domesticationinnovation.configuration.blight_curse_enabled": "Curse of Blight",
   "domesticationinnovation.configuration.blight_curse_enabled.tooltip": "Enables the Curse of Blight pet enchantment",
   "domesticationinnovation.configuration.immaturity_curse_enabled": "Curse of Immaturity",
-  "domesticationinnovation.configuration.immaturity_curse_enabled.tooltip": "Enables the Curse of Immaturity pet enchantment"
+  "domesticationinnovation.configuration.immaturity_curse_enabled.tooltip": "Enables the Curse of Immaturity pet enchantment",
+  "message.domesticationinnovation.jade_pet_bed": "Pet bed: %s",
+  "config.jade.plugin_domesticationinnovation.pet_enchantments": "Pet Enchantments",
+  "config.jade.plugin_domesticationinnovation.pet_bed": "Pet Bed Location"
 }

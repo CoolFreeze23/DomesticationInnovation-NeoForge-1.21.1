@@ -3,6 +3,8 @@ package com.github.alexthe668.domesticationinnovation.client;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.client.particle.*;
 import com.github.alexthe668.domesticationinnovation.client.render.*;
+import com.github.alexthe668.domesticationinnovation.client.tooltip.PetSnapshotTooltip;
+import com.github.alexthe668.domesticationinnovation.client.tooltip.PetSnapshotTooltipRenderer;
 import com.github.alexthe668.domesticationinnovation.server.CommonProxy;
 import com.github.alexthe668.domesticationinnovation.server.entity.*;
 import com.github.alexthe668.domesticationinnovation.server.item.DIItemRegistry;
@@ -12,12 +14,16 @@ import com.github.alexthe668.domesticationinnovation.server.misc.DIParticleRegis
 import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -29,8 +35,11 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -40,7 +49,9 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.*;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.util.TriState;
+import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
 import org.joml.Matrix4f;
 
 import java.util.HashMap;
@@ -62,6 +73,11 @@ public class ClientProxy extends CommonProxy {
     public static void registerModEvents(IEventBus modEventBus) {
         modEventBus.addListener(ClientProxy::onAddLayers);
         modEventBus.addListener(ClientProxy::setupParticles);
+        modEventBus.addListener(ClientProxy::registerTooltipComponents);
+        // Game-bus listener, registered here because this is the only
+        // client-dist startup hook; the handler is static, so it cannot ride
+        // the per-instance registrations in DomesticationMod
+        NeoForge.EVENT_BUS.addListener(ClientProxy::onItemTooltip);
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -112,6 +128,14 @@ public class ClientProxy extends CommonProxy {
         ItemProperties.register(DIItemRegistry.DEED_OF_OWNERSHIP.get(),
                 ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "bound"),
                 (stack, lvl, holder, i) -> DeedOfOwnershipItem.isBound(stack) ? 1 : 0);
+
+        // Live 3D preview on tooltips of stacks carrying a captured pet
+        // snapshot (recall ball pick-items, tamed axolotl buckets)
+        NeoForge.EVENT_BUS.addListener(PetSnapshotTooltip::onGatherTooltipComponents);
+    }
+
+    public static void registerTooltipComponents(RegisterClientTooltipComponentFactoriesEvent event) {
+        event.register(PetSnapshotTooltip.class, PetSnapshotTooltipRenderer::new);
     }
 
     public static void setupParticles(RegisterParticleProvidersEvent event) {
@@ -174,6 +198,45 @@ public class ClientProxy extends CommonProxy {
                 Minecraft.getInstance().gameMode.attack(player, result.getEntity());
             }
         }
+    }
+
+    // =========================================================================
+    // Item tooltip events
+    // =========================================================================
+
+    private static Boolean descriptionsModLoaded;
+
+    /**
+     * Fallback description lines for this mod's enchanted books, using the
+     * .desc lang keys we already ship. Steps aside entirely when a dedicated
+     * enchantment-descriptions mod is installed.
+     */
+    public static void onItemTooltip(ItemTooltipEvent event) {
+        if (isDescriptionsModLoaded()) return;
+        ItemStack stack = event.getItemStack();
+        if (!(stack.getItem() instanceof EnchantedBookItem)) return;
+        ItemEnchantments stored = stack.get(DataComponents.STORED_ENCHANTMENTS);
+        if (stored == null || stored.isEmpty()) return;
+
+        for (Holder<Enchantment> holder : stored.keySet()) {
+            holder.unwrapKey().ifPresent(key -> {
+                ResourceLocation id = key.location();
+                if (id.getNamespace().equals(DomesticationMod.MODID)) {
+                    String descKey = "enchantment." + id.getNamespace() + "." + id.getPath() + ".desc";
+                    if (I18n.exists(descKey)) {
+                        event.getToolTip().add(Component.translatable(descKey).withStyle(ChatFormatting.DARK_GRAY));
+                    }
+                }
+            });
+        }
+    }
+
+    private static boolean isDescriptionsModLoaded() {
+        if (descriptionsModLoaded == null) {
+            descriptionsModLoaded = ModList.get().isLoaded("enchdesc")
+                    || ModList.get().isLoaded("enchantment_descriptions");
+        }
+        return descriptionsModLoaded;
     }
 
     // =========================================================================

@@ -1,0 +1,14 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "repurposed_structures"
+    }
+  ],
+  "pieces_spawn_counts": [
+    {
+      "nbt_piece_name": "domesticationinnovation:taiga_petshop",
+      "never_spawn_more_than_this_many": 1
+    }
+  ]
+}

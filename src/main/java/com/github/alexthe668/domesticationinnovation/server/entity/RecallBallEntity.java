@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.server.entity;
 
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -18,6 +19,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SpawnEggItem;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -54,6 +58,25 @@ public class RecallBallEntity extends Entity {
 
     public boolean isPickable() {
         return !this.isFinished();
+    }
+
+    /**
+     * Pick-block on the ball yields the contained pet's spawn egg carrying the
+     * snapshot, mirroring how vanilla mobs pick as their egg; the attached data
+     * also feeds the live mob preview on the egg's tooltip.
+     */
+    @Override
+    @Nullable
+    public ItemStack getPickResult() {
+        SpawnEggItem egg = SpawnEggItem.byId(BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(this.getContainedEntityType())));
+        if (egg == null) {
+            return null;
+        }
+        ItemStack stack = new ItemStack(egg);
+        CompoundTag snapshot = this.getContainedData().copy();
+        snapshot.putString("id", this.getContainedEntityType());
+        stack.set(DataComponents.ENTITY_DATA, CustomData.of(snapshot));
+        return stack;
     }
 
     public InteractionResult interact(Player player, InteractionHand hand) {
