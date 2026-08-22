@@ -912,6 +912,9 @@ public class CommonProxy {
         if (target == null || !target.isAlive()) return;
 
         ServerLevel serverLevel = (ServerLevel) mob.level();
+        // Deliberate deviation: the swarm gate counts hostiles only. The
+        // original counted ANY nearby mob, so a pet standing in a livestock
+        // pen would boom at its own farm.
         if (!mob.closerThan(target, 10.0D, 20.0D) && getNearbyEnemies(mob, 10.0D).size() <= 3) return;
 
         List<LivingEntity> pointBlank = getNearbyEnemies(mob, 5.0D);

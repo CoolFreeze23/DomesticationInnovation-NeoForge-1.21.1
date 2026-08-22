@@ -920,20 +920,6 @@ public class TameableUtils {
                 hurtOwner.getBoundingBox().inflate(16, 4, 16), EntitySelector.NO_SPECTATORS.and(healer));
     }
 
-    /**
-     * All living hostiles (Enemy - covers slimes, phantoms, ghasts, hoglins,
-     * shulkers etc, not just Monster) within {@code range} blocks of the given
-     * entity, excluding the entity itself and anything sharing its owner.
-     * Shared query for the wave 3 enchantment effects (sonic boom target
-     * counting/AoE, insight glowing, share damage splash...).
-     */
-    public static List<LivingEntity> findNearbyEnemies(LivingEntity center, double range) {
-        Predicate<Entity> enemy = e -> e instanceof Enemy && e != center && e.isAlive()
-                && !hasSameOwnerAs((LivingEntity) e, center);
-        return center.level().getEntitiesOfClass(LivingEntity.class,
-                center.getBoundingBox().inflate(range), EntitySelector.NO_SPECTATORS.and(enemy));
-    }
-
     public static void absorbExpOrbs(LivingEntity living) {
         if (living.getHealth() >= living.getMaxHealth() || living.level().isClientSide) return;
         for (ExperienceOrb orb : living.level().getEntitiesOfClass(ExperienceOrb.class, living.getBoundingBox().inflate(3D))) {
