@@ -11,6 +11,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -86,6 +87,13 @@ public class TameableUtils {
     // neither a species mixin nor the vanilla TamableAnimal API
     private static final String GENERIC_TAME_OWNER = "GenericTameOwner";
     private static final String GENERIC_COMMAND = "GenericCommand";
+    // Bed-roam restriction anchor last applied by the brain tick path, so the
+    // restriction can be released after the bed link itself is gone
+    private static final String GENERIC_ROAM_ANCHOR = "GenericRoamAnchor";
+    // Marks a mob whose hostile targeting goals were stripped at data-tame
+    // time through the native (TamableAnimal/ModifedToBeTameable) branches,
+    // so the strip can be re-run after registerGoals() rebuilds them on load
+    private static final String DATA_TAME_STRIPPED = "DataTameStripped";
 
     // Attribute modifier IDs - NeoForge 1.21.1 uses ResourceLocation instead of UUID
     private static final ResourceLocation HEALTH_BOOST_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "health_boost");
@@ -188,6 +196,19 @@ public class TameableUtils {
                 || (entity instanceof Mob mob && isDataTamed(mob));
     }
 
+    /**
+     * Raw tame state across all three ownership layers, ignoring the
+     * per-species enable configs that {@link #isTamed} applies. The
+     * data-driven taming guard uses this so a mob tamed while its species
+     * toggle is off (e.g. tameable_fox=false) still reads as tamed and can
+     * never be re-tamed - and its taming item re-consumed - in a loop.
+     */
+    public static boolean isTamedIgnoringConfig(Entity entity) {
+        return (entity instanceof ModifedToBeTameable m && m.isTame())
+                || (entity instanceof TamableAnimal t && t.isTame())
+                || hasGenericOwnerData(entity);
+    }
+
     public static boolean couldBeTamed(Entity entity) {
         // The generic arm must stay a cheap peek: this gate runs per tick for
         // every living entity, and only mobs actually carrying generic owner
@@ -272,6 +293,51 @@ public class TameableUtils {
         if (!(entity instanceof LivingEntity living)) return null;
         CompoundTag tag = DIAttachments.peekPetData(living);
         return tag != null && tag.hasUUID(GENERIC_TAME_OWNER) ? tag.getUUID(GENERIC_TAME_OWNER) : null;
+    }
+
+    /**
+     * The bed-roam anchor last applied to this brain-AI pet by
+     * GenericPetAI.tickBrainRoamRestriction, or null when none is recorded.
+     * Mirrors BedAnchoredStrollGoal's appliedAnchor field, but persisted in
+     * PET_DATA: the tick path has no goal lifecycle to remember it in, and
+     * the record must survive the bed link itself being erased.
+     */
+    @Nullable
+    public static BlockPos getGenericRoamAnchor(Mob mob) {
+        CompoundTag tag = DIAttachments.peekPetData(mob);
+        return tag == null ? null : NbtUtils.readBlockPos(tag, GENERIC_ROAM_ANCHOR).orElse(null);
+    }
+
+    public static void setGenericRoamAnchor(Mob mob, BlockPos pos) {
+        CompoundTag tag = getPetTag(mob);
+        tag.put(GENERIC_ROAM_ANCHOR, NbtUtils.writeBlockPos(pos));
+        setPetTag(mob, tag);
+    }
+
+    public static void clearGenericRoamAnchor(Mob mob) {
+        CompoundTag tag = getPetTag(mob);
+        if (tag.contains(GENERIC_ROAM_ANCHOR)) {
+            tag.remove(GENERIC_ROAM_ANCHOR);
+            setPetTag(mob, tag);
+        }
+    }
+
+    /**
+     * Marks a mob whose hostile targeting goals were stripped at data-tame
+     * time through the native TamableAnimal/ModifedToBeTameable branches.
+     * Those mobs carry no generic owner record (ownership lives in the native
+     * API), so without this marker the join-time re-strip would skip them and
+     * registerGoals() would silently restore their attack goals on reload.
+     */
+    public static boolean isDataTameStripped(Mob mob) {
+        CompoundTag tag = DIAttachments.peekPetData(mob);
+        return tag != null && tag.getBoolean(DATA_TAME_STRIPPED);
+    }
+
+    public static void setDataTameStripped(Mob mob) {
+        CompoundTag tag = getPetTag(mob);
+        tag.putBoolean(DATA_TAME_STRIPPED, true);
+        setPetTag(mob, tag);
     }
 
     // =========================================================================

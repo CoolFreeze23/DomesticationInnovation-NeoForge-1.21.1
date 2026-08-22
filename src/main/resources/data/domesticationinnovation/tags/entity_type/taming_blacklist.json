@@ -3,6 +3,48 @@
   "values": [
     "minecraft:ender_dragon",
     "minecraft:wither",
-    "minecraft:warden"
+    "minecraft:warden",
+    "minecraft:villager",
+    "minecraft:wandering_trader",
+    {
+      "id": "caverns_and_chasms:rat",
+      "required": false
+    },
+    {
+      "id": "scguns:scamp",
+      "required": false
+    },
+    {
+      "id": "scguns:scampanzer",
+      "required": false
+    },
+    {
+      "id": "scguns:cog_minion",
+      "required": false
+    },
+    {
+      "id": "scguns:cog_knight",
+      "required": false
+    },
+    {
+      "id": "scguns:dissident",
+      "required": false
+    },
+    {
+      "id": "scguns:hive",
+      "required": false
+    },
+    {
+      "id": "scguns:sky_carrier",
+      "required": false
+    },
+    {
+      "id": "scguns:redcoat",
+      "required": false
+    },
+    {
+      "id": "scguns:blunderer",
+      "required": false
+    }
   ]
 }

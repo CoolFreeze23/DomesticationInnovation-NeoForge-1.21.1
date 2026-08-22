@@ -56,7 +56,9 @@ import net.minecraft.world.entity.npc.VillagerTrades;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemUtils;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.MobBucketItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
@@ -195,8 +197,12 @@ public class CommonProxy {
                 }
             }
             // Goal selectors are rebuilt on load, so data-tamed pets need
-            // their generic AI re-installed every join (idempotent, server-only)
-            if (!living.level().isClientSide && living instanceof Mob mob && TameableUtils.isDataTamed(mob)) {
+            // their generic AI re-installed every join (idempotent, server-only).
+            // The DataTameStripped marker catches native-branch pets
+            // (TamableAnimal/ModifedToBeTameable) that store no generic owner
+            // record but still need their hostile goals re-stripped.
+            if (!living.level().isClientSide && living instanceof Mob mob
+                    && (TameableUtils.isDataTamed(mob) || TameableUtils.isDataTameStripped(mob))) {
                 GenericPetAI.applyGenericPetAI(mob);
             }
             // Drop or adopt the stored bed link if the bed changed while unloaded
@@ -543,8 +549,11 @@ public class CommonProxy {
         }
 
         // Data-tamed brain mobs get their bed-anchored roaming via
-        // restrictTo instead of goal surgery
-        if (!living.level().isClientSide && living instanceof Mob mob && TameableUtils.isDataTamed(mob)) {
+        // restrictTo instead of goal surgery. Also called while a recorded
+        // roam anchor lingers, so a restriction applied earlier is still
+        // released after data_driven_taming is toggled off mid-session.
+        if (!living.level().isClientSide && living instanceof Mob mob
+                && (TameableUtils.isDataTamed(mob) || TameableUtils.getGenericRoamAnchor(mob) != null)) {
             GenericPetAI.tickBrainRoamRestriction(mob);
         }
 
@@ -1502,14 +1511,13 @@ public class CommonProxy {
         boolean sneakBypass = player.isShiftKeyDown()
                 && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get();
 
-        // Datapack-driven taming and transformations run BEFORE every hardcoded
-        // species path so packs can override or extend them. Taming is a
-        // feeding-style implicit interaction and honors the sneak bypass;
-        // transformations are deliberate item uses (like collar tags) and
-        // still go through while sneaking.
+        // Datapack-driven taming runs BEFORE every hardcoded species path so
+        // packs can override or extend them. Taming is a feeding-style
+        // implicit interaction and honors the sneak bypass. (Datapack
+        // transformations run AFTER the owned-pet interactions below - see
+        // the reference precedence note at that call.)
         if (entity instanceof Mob mob && DomesticationMod.CONFIG.dataDrivenTaming.get()) {
             if (!sneakBypass && handleDataDrivenTaming(player, mob, stack, event)) return;
-            if (handleDataDrivenTransformation(player, mob, stack, event)) return;
         }
 
         // Gluttonous - feed pet any food to heal
@@ -1529,6 +1537,17 @@ public class CommonProxy {
             if (stack.is(DIItemRegistry.COLLAR_TAG.get()) && DomesticationMod.CONFIG.collarTag.get()) {
                 handleCollarTagApplication(player, living, stack, event);
             }
+        }
+
+        // Datapack-driven transformations are evaluated LAST among item
+        // interactions, matching the reference precedence: a trigger_item that
+        // overlaps food or the collar tag must never shadow feeding a hungry
+        // Gluttonous pet or applying a collar to an owned pet. They are
+        // deliberate item uses (like collar tags) and still go through while
+        // sneaking. The collar block above cancels without returning, so an
+        // already-cancelled event must not also transform.
+        if (!event.isCanceled() && entity instanceof Mob mob && DomesticationMod.CONFIG.dataDrivenTaming.get()) {
+            if (handleDataDrivenTransformation(player, mob, stack, event)) return;
         }
 
         // Trinary command cycling for generic (datapack-tamed) pets. Species
@@ -1565,7 +1584,10 @@ public class CommonProxy {
      */
     private boolean handleDataDrivenTaming(Player player, Mob mob, ItemStack stack,
                                            PlayerInteractEvent.EntityInteract event) {
-        if (!mob.isAlive() || TameableUtils.isTamed(mob)) return false;
+        // Raw tame state, NOT the config-filtered isTamed view: a fox tamed
+        // through a datapack rule while tameable_fox=false must still count as
+        // tamed here, or every later click would consume and re-roll forever
+        if (!mob.isAlive() || TameableUtils.isTamedIgnoringConfig(mob)) return false;
         // The blacklist tag is a hard veto no datapack entry can override
         if (mob.getType().is(DIDataRegistries.TAMING_BLACKLIST)) return false;
         Registry<TamingDefinition> registry =
@@ -1587,16 +1609,25 @@ public class CommonProxy {
         event.setCancellationResult(InteractionResult.SUCCESS);
         if (mob.level().isClientSide) return true;
 
-        // Consume the item before the roll (matches our species taming), and
-        // hand back any container generically - modded fish buckets included
+        // Consume the item before the roll (matches our species taming). Mob
+        // buckets (tropical fish bucket etc, modded MobBucketItem subclasses
+        // included) declare no crafting remainder, so they get the reference's
+        // special case - hand back a water bucket - instead of destroying the
+        // whole bucket; everything else goes through the generic
+        // shrink-plus-crafting-remainder path.
         if (!player.isCreative()) {
-            ItemStack remainder = stack.getCraftingRemainingItem();
-            stack.shrink(1);
-            if (!remainder.isEmpty()) {
-                if (stack.isEmpty()) {
-                    player.setItemInHand(event.getHand(), remainder);
-                } else if (!player.getInventory().add(remainder)) {
-                    player.drop(remainder, false);
+            if (stack.getItem() instanceof MobBucketItem) {
+                player.setItemInHand(event.getHand(),
+                        ItemUtils.createFilledResult(stack, player, new ItemStack(Items.WATER_BUCKET)));
+            } else {
+                ItemStack remainder = stack.getCraftingRemainingItem();
+                stack.shrink(1);
+                if (!remainder.isEmpty()) {
+                    if (stack.isEmpty()) {
+                        player.setItemInHand(event.getHand(), remainder);
+                    } else if (!player.getInventory().add(remainder)) {
+                        player.drop(remainder, false);
+                    }
                 }
             }
         }
@@ -1624,10 +1655,14 @@ public class CommonProxy {
         if (mob instanceof TamableAnimal tamable) {
             tamable.setOwnerUUID(player.getUUID());
             tamable.setTame(true, true);
+            // Native-branch mobs carry no generic owner record, so mark them
+            // for the join-time goal re-strip (isDataTamed can't find them)
+            TameableUtils.setDataTameStripped(mob);
         } else if (mob instanceof ModifedToBeTameable modified) {
             modified.setTame(true);
             modified.setTameOwnerUUID(player.getUUID());
             modified.setCommand(1);
+            TameableUtils.setDataTameStripped(mob);
         } else {
             TameableUtils.setDataTameOwner(mob, player.getUUID());
         }

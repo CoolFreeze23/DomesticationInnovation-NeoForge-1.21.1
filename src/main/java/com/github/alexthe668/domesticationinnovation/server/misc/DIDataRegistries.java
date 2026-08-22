@@ -21,9 +21,12 @@ import net.neoforged.neoforge.registries.DataPackRegistryEvent;
  *   <li>{@code data/<ns>/domesticationinnovation/transformation/*.json} - {@link TransformationDefinition}</li>
  * </ul>
  *
- * Both registries are synced to clients so the interaction handler can answer
- * "would this click do something" on both sides without a round trip. All
- * side effects stay server-side in CommonProxy.
+ * Both registries are SYNCED to clients (the entry codec doubles as the
+ * network codec) so the interaction handler in CommonProxy can answer
+ * "would this click do something" on the client too and cancel the client
+ * event - suppressing vanilla interaction prediction and the offhand
+ * fall-through - without a round trip. All side effects (consuming items,
+ * taming, transforming) stay server-side in CommonProxy.
  */
 public class DIDataRegistries {
 
@@ -50,10 +53,12 @@ public class DIDataRegistries {
 
     /** Registered on the mod event bus by DomesticationMod. */
     public static void onNewDataPackRegistry(DataPackRegistryEvent.NewRegistry event) {
-        // Unsynced (no network codec): every lookup is server-side, and not
-        // syncing sidesteps client codec constraints entirely
-        event.dataPackRegistry(TAMING, TamingDefinition.CODEC);
-        event.dataPackRegistry(TRANSFORMATION, TransformationDefinition.CODEC);
+        // Synced (third argument is the network codec): the definition codecs
+        // are NbtOps-safe, so the same codec serves both disk and network.
+        // Clients need these registries present so the interaction handler's
+        // client-side match-and-cancel branches work.
+        event.dataPackRegistry(TAMING, TamingDefinition.CODEC, TamingDefinition.CODEC);
+        event.dataPackRegistry(TRANSFORMATION, TransformationDefinition.CODEC, TransformationDefinition.CODEC);
     }
 
     private static ResourceLocation id(String path) {

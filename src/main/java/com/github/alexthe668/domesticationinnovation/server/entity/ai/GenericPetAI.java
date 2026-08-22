@@ -50,11 +50,13 @@ public class GenericPetAI {
      * species work stays consistent:
      * <ul>
      *   <li>goalSelector: sit {@value #SIT_PRIORITY}, follow
-     *       {@value #FOLLOW_PRIORITY} - the same slots FoxMixin/RabbitMixin
-     *       use for Sit2Goal/FollowOwner2Goal. Vanilla mobs keep FloatGoal at
-     *       0 and PanicGoal at ~1, and GoalSelector only displaces a running
-     *       goal for a strictly higher priority, so a swimming or panicking
-     *       mob always finishes before sitting takes over.</li>
+     *       {@value #FOLLOW_PRIORITY} - both still below typical RandomStroll
+     *       (4-5), so follow keeps preempting idle wandering. Vanilla mobs
+     *       keep FloatGoal at 0 and PanicGoal at ~1, and GoalSelector only
+     *       displaces a running goal for a STRICTLY lower priority number, so
+     *       sit deliberately lives at 2 (like vanilla Cat: panic 1, sit 2):
+     *       a "staying" pet that catches fire can still panic to water
+     *       instead of sitting in the flames.</li>
      *   <li>goalSelector: bed stroll {@value #BED_STROLL_PRIORITY} -
      *       BedAnchoredStrollGoal is flagless so its priority is cosmetic;
      *       10 matches FoxMixin/CatMixin.</li>
@@ -64,8 +66,8 @@ public class GenericPetAI {
      *       HurtByTargetGoal/NearestAttackableTargetGoal typically held.</li>
      * </ul>
      */
-    public static final int SIT_PRIORITY = 1;
-    public static final int FOLLOW_PRIORITY = 2;
+    public static final int SIT_PRIORITY = 2;
+    public static final int FOLLOW_PRIORITY = 3;
     public static final int BED_STROLL_PRIORITY = 10;
     public static final int OWNER_HURT_BY_PRIORITY = 1;
     public static final int OWNER_HURT_PRIORITY = 2;
@@ -140,7 +142,11 @@ public class GenericPetAI {
      * entry existed.
      */
     public static void reapplyOnLoad(Mob mob) {
-        if (mob.level().isClientSide || !TameableUtils.isDataTamed(mob)) {
+        // The DataTameStripped marker catches native-branch pets
+        // (TamableAnimal/ModifedToBeTameable) whose ownership lives in the
+        // native API, not the generic PET_DATA record isDataTamed reads.
+        if (mob.level().isClientSide
+                || (!TameableUtils.isDataTamed(mob) && !TameableUtils.isDataTameStripped(mob))) {
             return;
         }
         applyGenericPetAI(mob);
@@ -155,25 +161,36 @@ public class GenericPetAI {
      * they run BedAnchoredStrollGoal instead.
      */
     public static void tickBrainRoamRestriction(Mob mob) {
-        if (mob.level().isClientSide
-                || !mob.getType().is(DIDataRegistries.USES_BRAIN_AI)
-                || !TameableUtils.isDataTamed(mob)) {
+        if (mob.level().isClientSide || !mob.getType().is(DIDataRegistries.USES_BRAIN_AI)) {
             return;
         }
-        BlockPos anchor = BedAnchoredStrollGoal.getRoamAnchor(mob);
+        // The release path deliberately runs before the isDataTamed gate:
+        // toggling data_driven_taming off mid-session must still release a
+        // restriction this helper applied earlier.
+        BlockPos recorded = TameableUtils.getGenericRoamAnchor(mob);
+        BlockPos anchor = TameableUtils.isDataTamed(mob)
+                ? BedAnchoredStrollGoal.getRoamAnchor(mob) : null;
         if (anchor != null) {
             int radius = DomesticationMod.CONFIG.petRoamingRadius.get();
             if (!mob.hasRestriction() || !anchor.equals(mob.getRestrictCenter()) || mob.getRestrictRadius() != (float) radius) {
                 mob.restrictTo(anchor, radius);
             }
-        } else if (mob.hasRestriction()) {
-            // Only release a restriction anchored on this pet's own bed, so
+            // Remember what we applied - mirrors BedAnchoredStrollGoal's
+            // appliedAnchor field, persisted because this path has no goal
+            // lifecycle. The record is what lets us recognize our own
+            // restriction after the bed link itself is erased (bed broken or
+            // claimed: getRoamAnchor and getPetBedPos both go null).
+            if (!anchor.equals(recorded)) {
+                TameableUtils.setGenericRoamAnchor(mob, anchor);
+            }
+        } else if (recorded != null) {
+            // Only release a restriction still anchored where we put it, so
             // leash anchors and other mods' restrictTo calls are never
-            // clobbered.
-            BlockPos bedPos = TameableUtils.getPetBedPos(mob);
-            if (bedPos != null && bedPos.equals(mob.getRestrictCenter())) {
+            // clobbered; either way the stale record is erased.
+            if (mob.hasRestriction() && recorded.equals(mob.getRestrictCenter())) {
                 mob.clearRestriction();
             }
+            TameableUtils.clearGenericRoamAnchor(mob);
         }
     }
 
