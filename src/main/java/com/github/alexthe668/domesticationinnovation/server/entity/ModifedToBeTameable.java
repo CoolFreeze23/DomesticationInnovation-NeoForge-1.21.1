@@ -27,7 +27,18 @@ import java.util.UUID;
 public interface ModifedToBeTameable extends OwnableEntity {
 
     boolean isTame();
-    void setTame(boolean value);
+
+    /**
+     * Default keeps this interface total for TamableAnimal implementors
+     * (wolves/cats/parrots): vanilla 1.21 only has the two-arg setTame, so
+     * without this an interface call is an AbstractMethodError. Species
+     * mixins with their own tame flag override it.
+     */
+    default void setTame(boolean value) {
+        if (this instanceof TamableAnimal ta) {
+            ta.setTame(value, true);
+        }
+    }
 
     @Nullable
     default UUID getTameOwnerUUID() {

@@ -1,0 +1,8 @@
+{
+  "#comment": "TEST-ONLY entry (gametest source set - never packaged in the release jar). The transformation registry ships EMPTY by default, so TamingInteractionTests.transformation_applies_datapack_entry seeds this definition through the same datapack path a real pack would use.",
+  "target_entity": "minecraft:sheep",
+  "trigger_item": {
+    "item": "minecraft:golden_carrot"
+  },
+  "result_entity": "minecraft:cow"
+}

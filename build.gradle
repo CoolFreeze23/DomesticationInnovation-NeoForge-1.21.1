@@ -13,15 +13,48 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// GameTest suite: mirrors the owner's proven OreSpawn setup (NeoGradle
+// userdev there, translated to ModDevGradle here). Tests live in their
+// own source set so test code and arena templates never ship in the mod
+// jar; the source set is folded into the mod below so NeoForge's
+// annotation scan finds @GameTestHolder classes, and the
+// `neoforge.enabledGameTestNamespaces` system property opts this mod's
+// namespace into the test discovery.
+sourceSets {
+    gametest {
+        // Convention already maps src/gametest/java + src/gametest/resources.
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    gametestImplementation.extendsFrom implementation
+    gametestRuntimeOnly.extendsFrom runtimeOnly
+}
+
 neoForge {
     version = '21.1.77'
+
+    // Puts NeoForge/Minecraft on the gametest source set's classpaths
+    // (MDG only wires sourceSets.main by default).
+    addModdingDependenciesTo sourceSets.gametest
 
     runs {
         client {
             client()
+            // Enables /test commands against this namespace in the dev client.
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'domesticationinnovation'
         }
         server {
             server()
+        }
+        // Headless CI-able suite runner: `gradlew runGameTestServer`
+        // starts a GameTestServer, runs every enabled test, and exits
+        // nonzero if any fail. (MDG 2.0.42-beta has no gameTestServer()
+        // shorthand on RunModel — the type string is the documented way.)
+        gameTestServer {
+            type = 'gameTestServer'
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'domesticationinnovation'
         }
         data {
             data()
@@ -34,6 +67,10 @@ neoForge {
     mods {
         domesticationinnovation {
             sourceSet sourceSets.main
+            // Gametest classes/templates load as part of the mod in dev
+            // runs (annotation scan + data/domesticationinnovation/structure
+            // templates); the jar task still packages only sourceSets.main.
+            sourceSet sourceSets.gametest
         }
     }
 }
