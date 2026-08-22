@@ -55,6 +55,17 @@ public final class DIEnchantmentKeys {
     public static final ResourceKey<Enchantment> HEALING_AURA = key("healing_aura");
     public static final ResourceKey<Enchantment> REJUVENATION = key("rejuvenation");
 
+    // === Wave 3 Additions (behavior adopted from pet_home, reimplemented) ===
+    public static final ResourceKey<Enchantment> SONIC_BOOM = key("sonic_boom");
+    public static final ResourceKey<Enchantment> XP_TRANSFER = key("xp_transfer");
+    public static final ResourceKey<Enchantment> INSIGHT = key("insight");
+    public static final ResourceKey<Enchantment> NIGHT_VISION = key("night_vision");
+    public static final ResourceKey<Enchantment> CHAOS = key("chaos");
+    public static final ResourceKey<Enchantment> PARALYSIS = key("paralysis");
+    public static final ResourceKey<Enchantment> SHARE = key("share");
+    public static final ResourceKey<Enchantment> TOUGH = key("tough");
+    public static final ResourceKey<Enchantment> VIOLENT = key("violent");
+
     // === Curse Enchantments ===
     public static final ResourceKey<Enchantment> UNDEAD_CURSE = key("undead_curse");
     public static final ResourceKey<Enchantment> INFAMY_CURSE = key("infamy_curse");

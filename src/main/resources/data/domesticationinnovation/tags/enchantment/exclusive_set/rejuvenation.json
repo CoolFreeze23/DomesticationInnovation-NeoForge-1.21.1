@@ -2,6 +2,7 @@
   "replace": false,
   "values": [
     "domesticationinnovation:healing_aura",
-    "domesticationinnovation:health_siphon"
+    "domesticationinnovation:health_siphon",
+    "domesticationinnovation:xp_transfer"
   ]
 }

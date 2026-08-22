@@ -16,7 +16,9 @@ public class DIConfig {
             "vampire", "void_cloud", "charisma", "shadow_hands", "disc_jockey",
             "defusal", "warping_bite", "ore_scenting", "gluttonous", "psychic_wall",
             "intimidation", "tethered_teleport", "muffled", "blazing_protection", "healing_aura",
-            "rejuvenation",             "undead_curse", "infamy_curse", "blight_curse", "immaturity_curse"
+            "rejuvenation",             "undead_curse", "infamy_curse", "blight_curse", "immaturity_curse",
+            "sonic_boom", "xp_transfer", "insight", "night_vision", "chaos",
+            "paralysis", "share", "tough", "violent"
     };
 
     public static final DIConfig INSTANCE;
@@ -66,6 +68,10 @@ public class DIConfig {
     public final ModConfigSpec.DoubleValue oreScentingLootChance;
     public final ModConfigSpec.DoubleValue muffledLootChance;
     public final ModConfigSpec.DoubleValue blazingProtectionLootChance;
+    public final ModConfigSpec.DoubleValue sonicBoomLootChance;
+    public final ModConfigSpec.DoubleValue paralysisLootChance;
+    public final ModConfigSpec.DoubleValue shareLootChance;
+    public final ModConfigSpec.DoubleValue toughLootChance;
 
     // ATM10 Integration
     public final ModConfigSpec.DoubleValue enchantPowerMultiplier;
@@ -115,6 +121,10 @@ public class DIConfig {
         oreScentingLootChance = builder.comment("chance of mineshaft loot containing Ore Scenting book").defineInRange("ore_scenting_loot_chance", 0.15D, 0.0, 1.0D);
         muffledLootChance = builder.comment("chance of ancient city loot containing Muffled book").defineInRange("muffled_loot_chance", 0.19D, 0.0, 1.0D);
         blazingProtectionLootChance = builder.comment("chance of nether fortress loot containing Blazing Protection book").defineInRange("blazing_protection_loot_chance", 0.2D, 0.0, 1.0D);
+        sonicBoomLootChance = builder.comment("chance of ancient city loot containing Sonic Boom book").defineInRange("sonic_boom_loot_chance", 0.6D, 0.0, 1.0D);
+        paralysisLootChance = builder.comment("chance of mineshaft, desert pyramid and bonus chest loot containing Paralysis book").defineInRange("paralysis_loot_chance", 0.1D, 0.0, 1.0D);
+        shareLootChance = builder.comment("chance of end city loot containing Share book").defineInRange("share_loot_chance", 0.5D, 0.0, 1.0D);
+        toughLootChance = builder.comment("chance of mineshaft loot containing Tough book").defineInRange("tough_loot_chance", 0.1D, 0.0, 1.0D);
         builder.pop();
 
         builder.push("atm10_integration");

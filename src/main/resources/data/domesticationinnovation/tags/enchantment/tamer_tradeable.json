@@ -4,6 +4,7 @@
     "domesticationinnovation:amphibious",
     "domesticationinnovation:blight_curse",
     "domesticationinnovation:chain_lightning",
+    "domesticationinnovation:chaos",
     "domesticationinnovation:deflection",
     "domesticationinnovation:defusal",
     "domesticationinnovation:disc_jockey",
@@ -17,17 +18,22 @@
     "domesticationinnovation:immaturity_curse",
     "domesticationinnovation:immunity_frame",
     "domesticationinnovation:infamy_curse",
+    "domesticationinnovation:insight",
     "domesticationinnovation:intimidation",
     "domesticationinnovation:linked_inventory",
     "domesticationinnovation:magnetic",
+    "domesticationinnovation:night_vision",
     "domesticationinnovation:poison_resistance",
     "domesticationinnovation:psychic_wall",
     "domesticationinnovation:rejuvenation",
     "domesticationinnovation:shadow_hands",
+    "domesticationinnovation:sonic_boom",
     "domesticationinnovation:speedster",
     "domesticationinnovation:tethered_teleport",
     "domesticationinnovation:total_recall",
     "domesticationinnovation:undead_curse",
-    "domesticationinnovation:warping_bite"
+    "domesticationinnovation:violent",
+    "domesticationinnovation:warping_bite",
+    "domesticationinnovation:xp_transfer"
   ]
 }

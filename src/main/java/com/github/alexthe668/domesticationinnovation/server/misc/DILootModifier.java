@@ -57,6 +57,14 @@ public class DILootModifier extends LootModifier {
                     DomesticationMod.CONFIG.muffledLootChance.get());
             case 6 -> addEnchantedBookIfChance(generatedLoot, context, DIEnchantmentKeys.BLAZING_PROTECTION,
                     DomesticationMod.CONFIG.blazingProtectionLootChance.get());
+            case 7 -> addEnchantedBookIfChance(generatedLoot, context, DIEnchantmentKeys.SONIC_BOOM,
+                    DomesticationMod.CONFIG.sonicBoomLootChance.get());
+            case 8 -> addEnchantedBookIfChance(generatedLoot, context, DIEnchantmentKeys.PARALYSIS,
+                    DomesticationMod.CONFIG.paralysisLootChance.get());
+            case 9 -> addEnchantedBookIfChance(generatedLoot, context, DIEnchantmentKeys.SHARE,
+                    DomesticationMod.CONFIG.shareLootChance.get());
+            case 10 -> addEnchantedBookIfChance(generatedLoot, context, DIEnchantmentKeys.TOUGH,
+                    DomesticationMod.CONFIG.toughLootChance.get());
         }
         return generatedLoot;
     }

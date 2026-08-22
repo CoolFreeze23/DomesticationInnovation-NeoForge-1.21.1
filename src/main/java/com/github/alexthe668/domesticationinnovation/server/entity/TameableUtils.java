@@ -87,6 +87,8 @@ public class TameableUtils {
     private static final ResourceLocation HEALTH_BOOST_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "health_boost");
     private static final ResourceLocation SPEED_BOOST_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "speed_boost");
     private static final ResourceLocation SPEED_BOOST_AQUATIC_LAND_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "amphibious_land_speed");
+    private static final ResourceLocation TOUGH_ARMOR_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "tough_armor");
+    private static final ResourceLocation TOUGH_KB_RESISTANCE_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "tough_kb_resistance");
 
     // =========================================================================
     // Entity data access - replaces CitadelEntityData
@@ -503,10 +505,43 @@ public class TameableUtils {
             }
         }
 
+        applyToughModifiers(entity);
+
         // Keep the health bar at the same TRUE fill level when max shifted
         float maxAfter = entity.getMaxHealth();
         if (health != null && entity.isAlive() && maxAfter > 0 && maxAfter != maxBefore) {
             entity.setHealth(Math.max(1.0F, Math.min(healthFraction * maxAfter, maxAfter)));
+        }
+    }
+
+    /**
+     * Tough: +3 armor and +3 knockback resistance per level (ADD_VALUE, no
+     * power multiplier - fixed wave-contract values). Vanilla clamps knockback
+     * resistance at 1.0, so the KB half is fully maxed from level 1 onward.
+     *
+     * <p>The modifiers are transient (unsaved), remove-before-add, so this is
+     * safe to call repeatedly. Called from {@code onUpdateEnchants} on every
+     * collar change; the entity-join load path (CommonProxy's
+     * refreshEnchantAttributeModifiers) must ALSO call this, like the other
+     * attribute enchants, or the bonuses vanish on chunk reload.
+     */
+    public static void applyToughModifiers(LivingEntity entity) {
+        int toughExtra = getEnchantLevel(entity, DIEnchantmentKeys.TOUGH);
+        AttributeInstance armor = entity.getAttribute(Attributes.ARMOR);
+        AttributeInstance kbResistance = entity.getAttribute(Attributes.KNOCKBACK_RESISTANCE);
+        if (armor != null) {
+            armor.removeModifier(TOUGH_ARMOR_ID);
+            if (toughExtra > 0) {
+                armor.addTransientModifier(new AttributeModifier(TOUGH_ARMOR_ID,
+                        toughExtra * 3, AttributeModifier.Operation.ADD_VALUE));
+            }
+        }
+        if (kbResistance != null) {
+            kbResistance.removeModifier(TOUGH_KB_RESISTANCE_ID);
+            if (toughExtra > 0) {
+                kbResistance.addTransientModifier(new AttributeModifier(TOUGH_KB_RESISTANCE_ID,
+                        toughExtra * 3, AttributeModifier.Operation.ADD_VALUE));
+            }
         }
     }
 
@@ -883,6 +918,20 @@ public class TameableUtils {
                 && hasEnchant((LivingEntity) a, DIEnchantmentKeys.HEALING_AURA) && getHealingAuraTime((LivingEntity) a) == 0;
         return hurtOwner.level().getEntitiesOfClass(LivingEntity.class,
                 hurtOwner.getBoundingBox().inflate(16, 4, 16), EntitySelector.NO_SPECTATORS.and(healer));
+    }
+
+    /**
+     * All living hostiles (Enemy - covers slimes, phantoms, ghasts, hoglins,
+     * shulkers etc, not just Monster) within {@code range} blocks of the given
+     * entity, excluding the entity itself and anything sharing its owner.
+     * Shared query for the wave 3 enchantment effects (sonic boom target
+     * counting/AoE, insight glowing, share damage splash...).
+     */
+    public static List<LivingEntity> findNearbyEnemies(LivingEntity center, double range) {
+        Predicate<Entity> enemy = e -> e instanceof Enemy && e != center && e.isAlive()
+                && !hasSameOwnerAs((LivingEntity) e, center);
+        return center.level().getEntitiesOfClass(LivingEntity.class,
+                center.getBoundingBox().inflate(range), EntitySelector.NO_SPECTATORS.and(enemy));
     }
 
     public static void absorbExpOrbs(LivingEntity living) {

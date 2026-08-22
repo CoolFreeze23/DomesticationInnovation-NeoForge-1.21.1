@@ -1,0 +1,21 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.chaos"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/chaos",
+  "weight": 5,
+  "max_level": 1,
+  "min_cost": {
+    "base": 4,
+    "per_level_above_first": 7
+  },
+  "max_cost": {
+    "base": 25,
+    "per_level_above_first": 7
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}

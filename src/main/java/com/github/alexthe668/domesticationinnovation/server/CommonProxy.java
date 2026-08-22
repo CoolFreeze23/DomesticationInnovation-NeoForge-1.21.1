@@ -41,6 +41,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.VillagerTrades;
 import net.minecraft.world.entity.player.Player;
@@ -105,9 +106,17 @@ public class CommonProxy {
             ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "speed_boost");
     private static final ResourceLocation AMPHIBIOUS_LAND_SPEED_MODIFIER_ID =
             ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "amphibious_land_speed");
+    private static final ResourceLocation TOUGH_ARMOR_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "tough_armor");
+    private static final ResourceLocation TOUGH_KB_RESISTANCE_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "tough_kb_resistance");
     private static final ResourceLocation BINDING_CURSE_ID = ResourceLocation.withDefaultNamespace("binding_curse");
     private static final ResourceLocation VANISHING_CURSE_ID = ResourceLocation.withDefaultNamespace("vanishing_curse");
     private static final TargetingConditions ZOMBIE_TARGET = TargetingConditions.forCombat().range(32.0D);
+
+    // Re-entrancy guard for the Share enchant: shared hits reuse the original
+    // DamageSource, so a shared victim's own hurt pipeline must not share again
+    private static final ThreadLocal<Boolean> SHARING_DAMAGE = ThreadLocal.withInitial(() -> false);
 
     // Pets pending cross-dimension teleportation, cleared each tick
     public static final List<PendingPetTeleport> teleportingPets = new ArrayList<>();
@@ -203,7 +212,9 @@ public class CommonProxy {
     private void refreshEnchantAttributeModifiers(LivingEntity living) {
         AttributeInstance health = living.getAttribute(Attributes.MAX_HEALTH);
         AttributeInstance speed = living.getAttribute(Attributes.MOVEMENT_SPEED);
-        if (health == null && speed == null) return;
+        AttributeInstance armor = living.getAttribute(Attributes.ARMOR);
+        AttributeInstance kbResistance = living.getAttribute(Attributes.KNOCKBACK_RESISTANCE);
+        if (health == null && speed == null && armor == null && kbResistance == null) return;
 
         float oldMax = living.getMaxHealth();
         float healthFraction = oldMax > 0 ? living.getHealth() / oldMax : 1.0F;
@@ -211,6 +222,7 @@ public class CommonProxy {
         double powerMult = DomesticationMod.CONFIG.enchantPowerMultiplier.get();
         int healthLevel = TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.HEALTH_BOOST);
         int speedLevel = TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.SPEEDSTER);
+        int toughLevel = TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.TOUGH);
         boolean amphibiousOnLand = TameableUtils.hasEnchant(living, DIEnchantmentKeys.AMPHIBIOUS)
                 && !living.isInWaterOrBubble() && isWaterCategory(living);
 
@@ -231,6 +243,21 @@ public class CommonProxy {
             if (amphibiousOnLand) {
                 speed.addTransientModifier(new AttributeModifier(AMPHIBIOUS_LAND_SPEED_MODIFIER_ID,
                         0.13, AttributeModifier.Operation.ADD_VALUE));
+            }
+        }
+        // Tough: same ids and amounts as the collar-update path in TameableUtils
+        if (armor != null) {
+            armor.removeModifier(TOUGH_ARMOR_MODIFIER_ID);
+            if (toughLevel > 0) {
+                armor.addTransientModifier(new AttributeModifier(TOUGH_ARMOR_MODIFIER_ID,
+                        toughLevel * 3, AttributeModifier.Operation.ADD_VALUE));
+            }
+        }
+        if (kbResistance != null) {
+            kbResistance.removeModifier(TOUGH_KB_RESISTANCE_MODIFIER_ID);
+            if (toughLevel > 0) {
+                kbResistance.addTransientModifier(new AttributeModifier(TOUGH_KB_RESISTANCE_MODIFIER_ID,
+                        toughLevel * 3, AttributeModifier.Operation.ADD_VALUE));
             }
         }
 
@@ -305,6 +332,66 @@ public class CommonProxy {
         }
         if (!level.isClientSide && level instanceof ServerLevel serverLevel) {
             processPendingTeleports(serverLevel);
+            if (serverLevel.getGameTime() % 10 == 0) {
+                tickXpTransferPets(serverLevel);
+            }
+        }
+    }
+
+    /**
+     * XP transfer: every 10 ticks, idle enchanted pets near their owner vacuum
+     * experience orbs within 10 blocks; orbs that reach the pet credit their
+     * value directly to the OWNER. The pet walks toward the nearest orb.
+     */
+    private void tickXpTransferPets(ServerLevel level) {
+        for (ServerPlayer owner : level.players()) {
+            List<Mob> pets = level.getEntitiesOfClass(Mob.class, owner.getBoundingBox().inflate(10.0D),
+                    pet -> TameableUtils.hasAnyEnchantsCheap(pet)
+                            && pet.getTarget() == null
+                            && !isOrderedToStay(pet)
+                            && TameableUtils.isPetOf(owner, pet)
+                            && TameableUtils.hasEnchant(pet, DIEnchantmentKeys.XP_TRANSFER));
+            for (Mob pet : pets) {
+                vacuumXpOrbsToOwner(pet, owner);
+            }
+        }
+    }
+
+    private static boolean isOrderedToStay(Mob pet) {
+        if (pet instanceof ModifedToBeTameable modified) return modified.isStayingStill();
+        if (pet instanceof TamableAnimal tame) return tame.isOrderedToSit();
+        return TameableUtils.tryGetCommand(pet) == 1;
+    }
+
+    private void vacuumXpOrbsToOwner(Mob pet, Player owner) {
+        List<ExperienceOrb> orbs = pet.level().getEntitiesOfClass(ExperienceOrb.class,
+                pet.getBoundingBox().inflate(10.0D));
+        if (orbs.isEmpty()) return;
+
+        Vec3 mouth = new Vec3(pet.getX(), pet.getY() + pet.getEyeHeight() / 2.0D, pet.getZ());
+        ExperienceOrb nearest = null;
+        double nearestDistSqr = Double.MAX_VALUE;
+        for (ExperienceOrb orb : orbs) {
+            Vec3 pull = mouth.subtract(orb.position());
+            double distSqr = pull.lengthSqr();
+            if (distSqr < 2.0D) {
+                owner.giveExperiencePoints(orb.getValue());
+                orb.discard();
+                continue;
+            }
+            if (distSqr < 64.0D) {
+                // Same falloff curve the rejuvenation vacuum uses
+                double strength = 1.0D - Math.sqrt(distSqr) / 8.0D;
+                orb.setDeltaMovement(orb.getDeltaMovement().add(pull.normalize().scale(strength * strength * 0.5D)));
+            }
+            if (distSqr < nearestDistSqr) {
+                nearestDistSqr = distSqr;
+                nearest = orb;
+            }
+        }
+        if (nearest != null) {
+            pet.getLookControl().setLookAt(nearest, 30.0F, 30.0F);
+            pet.getNavigation().moveTo(nearest, 1.2D);
         }
     }
 
@@ -545,6 +632,12 @@ public class CommonProxy {
         if (psychicWallLevel > 0 && living instanceof Mob mob && !living.level().isClientSide) {
             tickPsychicWall(mob, psychicWallLevel);
         }
+
+        // Sonic boom
+        if (living instanceof Mob mob && !living.level().isClientSide
+                && TameableUtils.hasEnchant(living, DIEnchantmentKeys.SONIC_BOOM)) {
+            tickSonicBoom(mob);
+        }
     }
 
     private void tickUtilityEnchants(LivingEntity living) {
@@ -590,6 +683,28 @@ public class CommonProxy {
         if (oreLvl > 0 && !living.level().isClientSide) {
             int interval = 100 + Math.max(150, 550 - oreLvl * 100);
             TameableUtils.detectRandomOres(living, interval, 5 + oreLvl * 2, oreLvl * 50, oreLvl * 3);
+        }
+
+        // Insight - reveal enemies in the dark. The Glowing pulse lasts 20
+        // ticks, so a 10-tick stagger keeps it seamless without paying for the
+        // (potentially 45-block) enemy scan every tick
+        int insightLvl = TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.INSIGHT);
+        if (insightLvl > 0 && !living.level().isClientSide
+                && (living.tickCount + living.getId()) % 10 == 0
+                && living.level().getMaxLocalRawBrightness(living.getOnPos().above()) < 9) {
+            for (LivingEntity enemy : getNearbyEnemies(living, insightLvl * 15)) {
+                enemy.addEffect(new MobEffectInstance(MobEffects.GLOWING, 20));
+            }
+        }
+
+        // Night vision - grant the nearby owner long night vision, re-applied
+        // once the old effect runs out
+        if (living.tickCount % 40 == 0 && !living.level().isClientSide
+                && TameableUtils.hasEnchant(living, DIEnchantmentKeys.NIGHT_VISION)
+                && TameableUtils.getOwnerOf(living) instanceof Player owner
+                && owner.distanceToSqr(living) < 10.0D
+                && !owner.hasEffect(MobEffects.NIGHT_VISION)) {
+            owner.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 6000));
         }
     }
 
@@ -781,6 +896,56 @@ public class CommonProxy {
         wall.setWallDirection(dir);
         mob.level().addFreshEntity(wall);
         TameableUtils.setPsychicWallCooldown(mob, level * 200 + 40);
+    }
+
+    /**
+     * Sonic boom: every 200 ticks, a pet that has a combat target within 10
+     * blocks (20 vertically) - or is swarmed by more than 3 enemies within 10
+     * blocks - fires a Warden-style sonic boom at its target. When more than 3
+     * enemies stand within 5 blocks, all of them are hit instead.
+     */
+    private void tickSonicBoom(Mob mob) {
+        // Timer first: everything below allocates or queries, and the boom can
+        // only ever fire on a 200-tick boundary anyway
+        if (mob.tickCount % 200 != 0) return;
+        LivingEntity target = mob.getTarget();
+        if (target == null || !target.isAlive()) return;
+
+        ServerLevel serverLevel = (ServerLevel) mob.level();
+        if (!mob.closerThan(target, 10.0D, 20.0D) && getNearbyEnemies(mob, 10.0D).size() <= 3) return;
+
+        List<LivingEntity> pointBlank = getNearbyEnemies(mob, 5.0D);
+        if (pointBlank.size() > 3) {
+            for (LivingEntity enemy : pointBlank) {
+                sonicBoomAttack(mob, enemy, serverLevel);
+            }
+        } else {
+            sonicBoomAttack(mob, target, serverLevel);
+        }
+    }
+
+    private static List<LivingEntity> getNearbyEnemies(LivingEntity center, double range) {
+        return center.level().getEntitiesOfClass(LivingEntity.class,
+                center.getBoundingBox().inflate(range),
+                e -> e != center && e instanceof Enemy && e.isAlive());
+    }
+
+    private static void sonicBoomAttack(Mob mob, LivingEntity target, ServerLevel serverLevel) {
+        // Vanilla's sonic_boom damage type is usable here: DamageSources#sonicBoom
+        // accepts any entity as the source, so no DI damage type is needed
+        Vec3 chest = mob.position().add(mob.getAttachments().get(EntityAttachment.WARDEN_CHEST, 0, mob.getYRot()));
+        Vec3 toTarget = target.getEyePosition().subtract(chest);
+        Vec3 ray = toTarget.normalize();
+        int particleSteps = Mth.floor(toTarget.length()) + 7;
+        for (int step = 1; step < particleSteps; step++) {
+            Vec3 pos = chest.add(ray.scale(step));
+            serverLevel.sendParticles(ParticleTypes.SONIC_BOOM, pos.x, pos.y, pos.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+        mob.playSound(SoundEvents.WARDEN_SONIC_BOOM, 3.0F, 1.0F);
+        if (target.hurt(serverLevel.damageSources().sonicBoom(mob), 10.0F)) {
+            double resist = 1.0D - target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE);
+            target.push(ray.x * 2.5D * resist, ray.y * 0.5D * resist, ray.z * 2.5D * resist);
+        }
     }
 
     private void tickHealingAura(LivingEntity living) {
@@ -1056,11 +1221,94 @@ public class CommonProxy {
             return;
         }
 
-        // Immaturity curse - reduce pet damage output
-        if (event.getSource().getEntity() instanceof LivingEntity pet && TameableUtils.isTamed(pet)) {
+        // --- Attacker-side: pet's landed hits ---
+        if (event.getSource().getEntity() instanceof LivingEntity pet && TameableUtils.isTamed(pet)
+                && TameableUtils.hasAnyEnchantsCheap(pet)) {
+            // Violent - random on-hit mayhem
+            if (TameableUtils.hasEnchant(pet, DIEnchantmentKeys.VIOLENT)) {
+                rollViolentWheel(event);
+            }
+            // Immaturity curse - reduce pet damage output
             if (TameableUtils.hasEnchant(pet, DIEnchantmentKeys.IMMATURITY_CURSE)) {
                 event.setNewDamage((float) Math.ceil(event.getNewDamage() * 0.7F));
             }
+        }
+
+        // --- Victim-side: retaliation enchants on a hurt pet ---
+        LivingEntity victim = event.getEntity();
+        if (TameableUtils.isTamed(victim) && TameableUtils.hasAnyEnchantsCheap(victim)
+                && event.getSource().getEntity() instanceof LivingEntity attacker && attacker != victim) {
+            // Chaos - the attacker staggers away drunk
+            if (TameableUtils.hasEnchant(victim, DIEnchantmentKeys.CHAOS)) {
+                attacker.addEffect(new MobEffectInstance(DIEffectRegistry.DRUNK, 120, 1));
+            }
+            // Paralysis - lock the attacker down, scaling duration with level
+            int paralysisLevel = TameableUtils.getEnchantLevel(victim, DIEnchantmentKeys.PARALYSIS);
+            if (paralysisLevel > 0) {
+                applyParalysisDebuffs(attacker, paralysisLevel * 20);
+            }
+            // Share - spread a cut of the pain to every enemy in earshot
+            if (TameableUtils.hasEnchant(victim, DIEnchantmentKeys.SHARE) && !SHARING_DAMAGE.get()) {
+                shareDamageWithEnemies(victim, event);
+            }
+        }
+    }
+
+    /**
+     * Violent: every hit the pet lands rolls once on a wheel of side effects,
+     * from a rare outright kill down to a minor slow/weaken. Damage tweaks are
+     * applied in-pipeline via setNewDamage so armor, absorption, totems and
+     * other mods' damage hooks all still apply (the reference mod's "instant
+     * kill" called die() without dealing damage, dropping loot from a mob that
+     * then stayed alive - deal an actually lethal hit instead).
+     */
+    private void rollViolentWheel(LivingDamageEvent.Pre event) {
+        LivingEntity target = event.getEntity();
+        float roll = target.getRandom().nextFloat();
+        if (roll < 0.01F) {
+            event.setNewDamage(Float.MAX_VALUE);
+        } else if (roll < 0.11F) {
+            target.addEffect(new MobEffectInstance(MobEffects.POISON, 100));
+        } else if (roll < 0.21F) {
+            applyParalysisDebuffs(target, 20);
+        } else if (roll < 0.41F) {
+            event.setNewDamage(event.getOriginalDamage() + 3.0F);
+        } else if (roll < 0.60F) {
+            target.igniteForTicks(100);
+        } else if (roll < 0.70F) {
+            event.setNewDamage(target.getHealth() > 30.0F
+                    ? target.getHealth() / 3.0F : event.getOriginalDamage() + 5.0F);
+        } else if (roll < 0.80F) {
+            target.addEffect(new MobEffectInstance(DIEffectRegistry.DRUNK, 100));
+        } else {
+            target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 20, 50, false, false));
+            target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 20, 50, false, false));
+        }
+    }
+
+    private static void applyParalysisDebuffs(LivingEntity target, int duration) {
+        target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 100, false, false));
+        target.addEffect(new MobEffectInstance(MobEffects.DIG_SLOWDOWN, duration, 100, false, false));
+        target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, duration, 100, false, false));
+    }
+
+    /**
+     * Share: when the hurt pet has more than one enemy within 20 blocks, each
+     * of them takes 30% of the original damage with the same damage source.
+     * The re-entrancy guard stops a shared hit on another SHARE pet (or any
+     * mod echoing the source) from cascading back through this handler.
+     */
+    private void shareDamageWithEnemies(LivingEntity victim, LivingDamageEvent.Pre event) {
+        List<LivingEntity> enemies = getNearbyEnemies(victim, 20.0D);
+        if (enemies.size() <= 1) return;
+        float shared = event.getOriginalDamage() * 0.3F;
+        SHARING_DAMAGE.set(true);
+        try {
+            for (LivingEntity enemy : enemies) {
+                enemy.hurt(event.getSource(), shared);
+            }
+        } finally {
+            SHARING_DAMAGE.set(false);
         }
     }
 

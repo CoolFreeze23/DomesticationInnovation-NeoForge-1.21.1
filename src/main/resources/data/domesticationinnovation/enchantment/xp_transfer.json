@@ -1,0 +1,21 @@
+{
+  "description": {
+    "translate": "enchantment.domesticationinnovation.xp_transfer"
+  },
+  "supported_items": "#domesticationinnovation:collar_tag_enchantable",
+  "exclusive_set": "#domesticationinnovation:exclusive_set/xp_transfer",
+  "weight": 5,
+  "max_level": 1,
+  "min_cost": {
+    "base": 3,
+    "per_level_above_first": 7
+  },
+  "max_cost": {
+    "base": 25,
+    "per_level_above_first": 7
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ]
+}

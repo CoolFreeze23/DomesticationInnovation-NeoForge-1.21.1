@@ -17,6 +17,7 @@
     "domesticationinnovation:immaturity_curse",
     "domesticationinnovation:immunity_frame",
     "domesticationinnovation:infamy_curse",
+    "domesticationinnovation:insight",
     "domesticationinnovation:intimidation",
     "domesticationinnovation:linked_inventory",
     "domesticationinnovation:magnetic",
@@ -28,6 +29,7 @@
     "domesticationinnovation:tethered_teleport",
     "domesticationinnovation:total_recall",
     "domesticationinnovation:undead_curse",
-    "domesticationinnovation:warping_bite"
+    "domesticationinnovation:warping_bite",
+    "domesticationinnovation:xp_transfer"
   ]
 }
