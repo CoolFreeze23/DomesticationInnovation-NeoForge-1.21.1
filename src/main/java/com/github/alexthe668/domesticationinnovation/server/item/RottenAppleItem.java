@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.server.item;
 
+import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvents;
@@ -35,6 +36,7 @@ public class RottenAppleItem extends Item {
                 horse.setItemSlot(EquipmentSlot.BODY, ItemStack.EMPTY);
             }
             horse.addAdditionalSaveData(horseExtras);
+            DIAttachments.writePetDataTo(horse, horseExtras);
             for(int i = 0; i < 6 + horse.getRandom().nextInt(5); i++){
                 horse.level().addParticle(ParticleTypes.SNEEZE, horse.getRandomX(1.0F), horse.getRandomY(), horse.getRandomZ(1.0F), 0F, 0F, 0F);
             }
@@ -50,6 +52,7 @@ public class RottenAppleItem extends Item {
                 zombie.setCustomNameVisible(horse.isCustomNameVisible());
             }
             zombie.readAdditionalSaveData(horseExtras);
+            DIAttachments.readPetDataFrom(zombie, horseExtras);
             zombie.setPersistenceRequired();
             net.neoforged.neoforge.event.EventHooks.onLivingConvert(horse, zombie);
             player.level().addFreshEntity(zombie);

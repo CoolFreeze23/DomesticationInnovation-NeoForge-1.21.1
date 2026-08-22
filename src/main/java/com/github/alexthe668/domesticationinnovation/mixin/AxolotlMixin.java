@@ -1,8 +1,12 @@
 package com.github.alexthe668.domesticationinnovation.mixin;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
+import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.PetCombatRules;
 import net.minecraft.advancements.CriteriaTriggers;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -107,6 +111,7 @@ public abstract class AxolotlMixin extends Animal implements ModifedToBeTameable
         var customData = stack.getOrDefault(net.minecraft.core.component.DataComponents.BUCKET_ENTITY_DATA, net.minecraft.world.item.component.CustomData.EMPTY);
         CompoundTag compoundNBT = customData.copyTag();
         this.addAdditionalSaveData(compoundNBT);
+        DIAttachments.writePetDataTo(this, compoundNBT);
         compoundNBT.putInt("DICommand", this.getCommand());
         compoundNBT.putBoolean("Tamed", this.isTame());
         if (this.getTameOwnerUUID() != null) {
@@ -122,6 +127,7 @@ public abstract class AxolotlMixin extends Animal implements ModifedToBeTameable
     )
     private void di_readAdditionalBucket(CompoundTag compoundNBT, CallbackInfo ci) {
         this.readAdditionalSaveData(compoundNBT);
+        DIAttachments.readPetDataFrom(this, compoundNBT);
         this.setCommand(compoundNBT.getInt("DICommand"));
         this.setTame(compoundNBT.getBoolean("Tamed"));
         UUID uuid;
@@ -174,7 +180,7 @@ public abstract class AxolotlMixin extends Animal implements ModifedToBeTameable
                     this.heal(2);
                     this.playSound(SoundEvents.CAT_EAT, this.getSoundVolume(), this.getVoicePitch());
                     cir.setReturnValue(InteractionResult.SUCCESS);
-                }else if(super.mobInteract(player, hand) == InteractionResult.PASS && DomesticationMod.CONFIG.trinaryCommandSystem.get()){
+                }else if(!(player.isShiftKeyDown() && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get()) && super.mobInteract(player, hand) == InteractionResult.PASS && DomesticationMod.CONFIG.trinaryCommandSystem.get()){
                     player.swing(hand, true);
                     cir.setReturnValue(this.playerSetCommand(player, this));
                 }
@@ -189,11 +195,29 @@ public abstract class AxolotlMixin extends Animal implements ModifedToBeTameable
     )
     private void di_customServerAiStep(CallbackInfo ci) {
         if(this.isTame() && this.getTameOwner() != null){
-            if(this.getTameOwner().getLastHurtMob() != null && this.getTameOwner().getLastHurtMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtMob())){
+            if(this.getTameOwner().getLastHurtMob() != null && this.getTameOwner().getLastHurtMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtMob()) && PetCombatRules.wantsToFight(this, this.getTameOwner().getLastHurtMob())){
                 this.setTarget(this.getTameOwner().getLastHurtMob());
             }
-            if(this.getTameOwner().getLastHurtByMob() != null && this.getTameOwner().getLastHurtByMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtByMob())){
+            if(this.getTameOwner().getLastHurtByMob() != null && this.getTameOwner().getLastHurtByMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtByMob()) && PetCombatRules.wantsToFight(this, this.getTameOwner().getLastHurtByMob())){
                 this.setTarget(this.getTameOwner().getLastHurtByMob());
+            }
+        }
+        this.di_updateRoamRestriction();
+    }
+
+    // Brain-driven pets cannot run BedAnchoredStrollGoal, so drive the same
+    // restrictTo/clearRestriction cycle off its static anchor lookup here.
+    private void di_updateRoamRestriction() {
+        BlockPos anchor = BedAnchoredStrollGoal.getRoamAnchor(this);
+        if (anchor != null) {
+            int radius = DomesticationMod.CONFIG.petRoamingRadius.get();
+            if (!this.hasRestriction() || !anchor.equals(this.getRestrictCenter()) || this.getRestrictRadius() != (float) radius) {
+                this.restrictTo(anchor, radius);
+            }
+        } else if (this.hasRestriction()) {
+            BlockPos bedPos = TameableUtils.getPetBedPos(this);
+            if (bedPos != null && bedPos.equals(this.getRestrictCenter())) {
+                this.clearRestriction();
             }
         }
     }

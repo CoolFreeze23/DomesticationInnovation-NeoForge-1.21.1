@@ -42,6 +42,20 @@ public class DIConfig {
     public final ModConfigSpec.BooleanValue rabbitsScareRavagers;
     public final ModConfigSpec.BooleanValue animalTamerVillager;
     public final ModConfigSpec.IntValue petstoreVillageWeight;
+    public final ModConfigSpec.BooleanValue collarDropsOnDeath;
+    public final ModConfigSpec.BooleanValue sneakBypassesPetInteractions;
+    public final ModConfigSpec.IntValue collarTagEnchantability;
+    public final ModConfigSpec.BooleanValue tamerSellsBooks;
+    public final ModConfigSpec.IntValue lanternRequestTimeoutTicks;
+    public final ModConfigSpec.BooleanValue lanternCrashSafeRespawn;
+    public final ModConfigSpec.BooleanValue exclusivePetBeds;
+    public final ModConfigSpec.BooleanValue infamyCurseAggrosAllHostiles;
+
+    // Pet care
+    public final ModConfigSpec.BooleanValue injuredPetsStopFighting;
+    public final ModConfigSpec.DoubleValue injuredHealthRatio;
+    public final ModConfigSpec.BooleanValue disablePetTeleportation;
+    public final ModConfigSpec.IntValue petRoamingRadius;
 
     // Loot
     public final ModConfigSpec.BooleanValue petCurseEnchantmentsLootOnly;
@@ -75,6 +89,21 @@ public class DIConfig {
         rabbitsScareRavagers = builder.comment("true if rabbits scare ravagers").define("rabbits_scare_ravagers", true);
         animalTamerVillager = builder.comment("true if animal tamer villagers are enabled. Their work station is a pet bed").define("animal_tamer_villager", true);
         petstoreVillageWeight = builder.comment("the spawn weight of the pet store in villages, set to 0 to disable").defineInRange("petstore_village_weight", 17, 0, 1000);
+        collarDropsOnDeath = builder.comment("true if a pet with no pet bed drops its collar tag (keeping enchantments and name) when it dies").define("collar_drops_on_death", true);
+        sneakBypassesPetInteractions = builder.comment("true if sneaking skips pet command cycling and feeding so vanilla and modded interactions can be reached. Collar tags still apply while sneaking").define("sneak_bypasses_pet_interactions", true);
+        collarTagEnchantability = builder.comment("enchantability of the collar tag item. Higher values give better enchanting table offers; 1 matches the original mod").defineInRange("collar_tag_enchantability", 10, 1, 50);
+        tamerSellsBooks = builder.comment("true if animal tamer villagers sell random pet enchantment books").define("tamer_sells_books", true);
+        lanternRequestTimeoutTicks = builder.comment("how many ticks a wayward lantern waits for a pet's chunk to load before abandoning that retrieval").defineInRange("lantern_request_timeout_ticks", 100, 20, 6000);
+        lanternCrashSafeRespawn = builder.comment("true if a wayward lantern rebuilds a missing pet from its last saved snapshot when the pet's chunk loads without it").define("lantern_crash_safe_respawn", true);
+        exclusivePetBeds = builder.comment("true if each pet bed belongs to one pet at a time and refuses others while its claim holds").define("exclusive_pet_beds", true);
+        infamyCurseAggrosAllHostiles = builder.comment("true if the infamy curse draws every hostile mob (slimes, phantoms, ghasts, etc) to the pet; false limits it to regular monsters like the original mod").define("infamy_curse_aggros_all_hostiles", true);
+        builder.pop();
+
+        builder.push("pet_care");
+        injuredPetsStopFighting = builder.comment("true if badly hurt pets refuse to fight anything except hostile mobs and iron golems").define("injured_pets_stop_fighting", true);
+        injuredHealthRatio = builder.comment("fraction of max health at or below which a pet counts as badly hurt").defineInRange("injured_health_ratio", 0.2D, 0.0D, 1.0D);
+        disablePetTeleportation = builder.comment("true if pets keep walking toward a faraway owner instead of teleporting to them").define("disable_pet_teleportation", false);
+        petRoamingRadius = builder.comment("pets in wander mode stay within this many blocks of their claimed pet bed, set to 0 to disable").defineInRange("pet_roaming_radius", 0, 0, 512);
         builder.pop();
 
         builder.push("loot");

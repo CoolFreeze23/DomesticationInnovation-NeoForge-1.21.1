@@ -26,9 +26,11 @@
     "ParrotMixin",
     "PlayerMixin",
     "RabbitMixin",
+    "RavagerMixin",
     "SculkSensorBlockMixin",
     "ShootTongueMixin",
     "TameableAnimalMixin",
+    "TargetGoalMixin",
     "VillagerMixin",
     "WolfMixin"
   ],

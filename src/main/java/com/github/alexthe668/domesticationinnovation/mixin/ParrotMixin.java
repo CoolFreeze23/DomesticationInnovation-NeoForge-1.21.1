@@ -1,6 +1,7 @@
 package com.github.alexthe668.domesticationinnovation.mixin;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -26,6 +27,15 @@ public abstract class ParrotMixin extends TamableAnimal implements ModifedToBeTa
 
     protected ParrotMixin(EntityType<? extends TamableAnimal> type, Level level) {
         super(type, level);
+    }
+
+    @Inject(
+            at = {@At("TAIL")},
+            remap = true,
+            method = {"Lnet/minecraft/world/entity/animal/Parrot;registerGoals()V"}
+    )
+    private void di_registerGoals(CallbackInfo ci) {
+        this.goalSelector.addGoal(1, new BedAnchoredStrollGoal(this));
     }
 
     @Inject(
@@ -67,7 +77,7 @@ public abstract class ParrotMixin extends TamableAnimal implements ModifedToBeTa
             cancellable = true
     )
     private void di_onInteract(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-        if(DomesticationMod.CONFIG.trinaryCommandSystem.get()){
+        if(DomesticationMod.CONFIG.trinaryCommandSystem.get() && !(player.isShiftKeyDown() && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get())){
             this.jumping = false;
             this.navigation.stop();
             this.setTarget((LivingEntity)null);

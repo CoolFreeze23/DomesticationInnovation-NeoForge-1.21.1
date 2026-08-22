@@ -3,8 +3,11 @@ import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.entity.IFrog;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.PetCombatRules;
 import com.github.alexthe668.domesticationinnovation.server.misc.DITagRegistry;
 import net.minecraft.advancements.CriteriaTriggers;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -218,7 +221,7 @@ public abstract class FrogMixin extends Animal implements ModifedToBeTameable, I
                     this.heal(2);
                     this.playSound(SoundEvents.FROG_EAT, this.getSoundVolume(), this.getVoicePitch());
                     return true;
-                } else if (DomesticationMod.CONFIG.trinaryCommandSystem.get()) {
+                } else if (DomesticationMod.CONFIG.trinaryCommandSystem.get() && !(player.isShiftKeyDown() && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get())) {
                     player.swing(hand, true);
                     this.playerSetCommand(player, this);
                     return false;
@@ -235,13 +238,31 @@ public abstract class FrogMixin extends Animal implements ModifedToBeTameable, I
     )
     private void di_customServerAiStep(CallbackInfo ci) {
         if (this.isTame() && this.getTameOwner() != null) {
-            if (this.getTameOwner().getLastHurtMob() != null && this.getTameOwner().getLastHurtMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtMob())) {
+            if (this.getTameOwner().getLastHurtMob() != null && this.getTameOwner().getLastHurtMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtMob()) && PetCombatRules.wantsToFight(this, this.getTameOwner().getLastHurtMob())) {
                 this.setTarget(this.getTameOwner().getLastHurtMob());
                 this.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, this.getTameOwner().getLastHurtMob());
             }
-            if (this.getTameOwner().getLastHurtByMob() != null && this.getTameOwner().getLastHurtByMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtByMob())) {
+            if (this.getTameOwner().getLastHurtByMob() != null && this.getTameOwner().getLastHurtByMob().isAlive() && !TameableUtils.hasSameOwnerAs(this, this.getTameOwner().getLastHurtByMob()) && PetCombatRules.wantsToFight(this, this.getTameOwner().getLastHurtByMob())) {
                 this.setTarget(this.getTameOwner().getLastHurtByMob());
                 this.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, this.getTameOwner().getLastHurtByMob());
+            }
+        }
+        this.di_updateRoamRestriction();
+    }
+
+    // Brain-driven pets cannot run BedAnchoredStrollGoal, so drive the same
+    // restrictTo/clearRestriction cycle off its static anchor lookup here.
+    private void di_updateRoamRestriction() {
+        BlockPos anchor = BedAnchoredStrollGoal.getRoamAnchor(this);
+        if (anchor != null) {
+            int radius = DomesticationMod.CONFIG.petRoamingRadius.get();
+            if (!this.hasRestriction() || !anchor.equals(this.getRestrictCenter()) || this.getRestrictRadius() != (float) radius) {
+                this.restrictTo(anchor, radius);
+            }
+        } else if (this.hasRestriction()) {
+            BlockPos bedPos = TameableUtils.getPetBedPos(this);
+            if (bedPos != null && bedPos.equals(this.getRestrictCenter())) {
+                this.clearRestriction();
             }
         }
     }

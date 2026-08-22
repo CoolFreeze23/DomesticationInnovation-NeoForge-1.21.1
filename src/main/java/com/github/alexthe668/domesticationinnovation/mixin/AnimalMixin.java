@@ -37,7 +37,7 @@ public abstract class AnimalMixin extends AgeableMob {
         if((Mob)this instanceof IFrog && ((IFrog)this).onFrogInteract(player, hand)){
             cir.setReturnValue(InteractionResult.SUCCESS);
         }
-        if((Mob)this instanceof Fox && this instanceof ModifedToBeTameable && this instanceof ModifedToBeTameable tame && tame.isTame() && tame.getTameOwnerUUID().equals(player.getUUID()) && DomesticationMod.CONFIG.tameableFox.get() && DomesticationMod.CONFIG.trinaryCommandSystem.get()){
+        if((Mob)this instanceof Fox && this instanceof ModifedToBeTameable && this instanceof ModifedToBeTameable tame && tame.isTame() && tame.getTameOwnerUUID().equals(player.getUUID()) && DomesticationMod.CONFIG.tameableFox.get() && DomesticationMod.CONFIG.trinaryCommandSystem.get() && !(player.isShiftKeyDown() && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get())){
             player.swing(hand, true);
             cir.setReturnValue(((ModifedToBeTameable)this).playerSetCommand(player, (Animal)(Mob)this));
         }

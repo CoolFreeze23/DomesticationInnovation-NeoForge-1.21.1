@@ -1,6 +1,7 @@
 package com.github.alexthe668.domesticationinnovation.mixin;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
 import com.github.alexthe668.domesticationinnovation.server.entity.ai.FollowOwner2Goal;
 import com.github.alexthe668.domesticationinnovation.server.entity.ai.OwnerHurtTarget2Goal;
 import com.github.alexthe668.domesticationinnovation.server.entity.ai.Sit2Goal;
@@ -51,6 +52,7 @@ public abstract class FoxMixin extends Animal implements ModifedToBeTameable {
     private void di_registerGoals(CallbackInfo ci) {
         this.goalSelector.addGoal(1, new Sit2Goal(this));
         this.goalSelector.addGoal(2, new FollowOwner2Goal(this, 1.0D, 10.0F, 3.0F, false));
+        this.goalSelector.addGoal(10, new BedAnchoredStrollGoal(this));
         this.targetSelector.addGoal(1, new OwnerHurtTarget2Goal(this));
     }
 

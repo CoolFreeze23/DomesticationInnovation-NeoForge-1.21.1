@@ -1,5 +1,7 @@
 package com.github.alexthe668.domesticationinnovation.server.block;
 
+import com.github.alexthe668.domesticationinnovation.DomesticationMod;
+import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
 import com.github.alexthe668.domesticationinnovation.server.misc.DIWorldData;
 import com.github.alexthe668.domesticationinnovation.server.misc.LanternRequest;
@@ -9,6 +11,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -17,61 +21,116 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
 public class WaywardLanternBlockEntity extends BlockEntity {
 
+    // a pet already this close to the lantern is left where it stands
+    private static final double NEARBY_DIST_SQR = 24 * 24;
+
     private int checkAgainIn = 100;
-    private int entityLoadTimeout = 0;
     private List<LanternRequest> workingRequests = new ArrayList<>();
-    private List<UUID> finishedRequests = new ArrayList<>();
     public WaywardLanternBlockEntity(BlockPos pos, BlockState state) {
         super(DITileEntityRegistry.WAYWARD_LANTERN.get(), pos, state);
     }
 
     public static void tick(Level level, BlockPos pos, BlockState state, WaywardLanternBlockEntity te) {
-        if(!te.finishedRequests.isEmpty()){
-            DIWorldData data = DIWorldData.get(level);
-            te.workingRequests.removeIf(lanternRequest -> te.finishedRequests.contains(lanternRequest.getPetUUID()));
-            for(UUID uuid: te.finishedRequests){
-                data.removeMatchingLanternRequests(uuid);
-            }
-            te.finishedRequests.clear();
-        }
         if(te.workingRequests.isEmpty()){
             if(te.checkAgainIn > 0){
                 te.checkAgainIn--;
             }else{
                 te.checkAgainIn = 200 + level.random.nextInt(400);
                 DIWorldData data = DIWorldData.get(level);
-                for (Player player : getPlayers(level, pos)) {
-                    te.workingRequests.addAll(data.getLanternRequestsFor(player.getUUID()));
+                if(data != null){
+                    for (Player player : getPlayers(level, pos)) {
+                        for (LanternRequest request : data.getLanternRequestsFor(player.getUUID())) {
+                            if (request.matchesDimension(level)) {
+                                te.workingRequests.add(request);
+                            }
+                        }
+                    }
                 }
             }
         }else{
             if(level instanceof ServerLevel serverLevel) {
-                for (LanternRequest request : te.workingRequests) {
-                    loadChunksAround(serverLevel, request.getPetUUID(), request.getChunkPosition(), true);
+                DIWorldData data = DIWorldData.get(level);
+                int timeout = DomesticationMod.CONFIG.lanternRequestTimeoutTicks.get();
+                Iterator<LanternRequest> iterator = te.workingRequests.iterator();
+                while (iterator.hasNext()) {
+                    LanternRequest request = iterator.next();
+                    // the 3x3 of chunks is forced exactly once per request, not re-issued every tick
+                    if (!request.areChunksForced()) {
+                        loadChunksAround(serverLevel, request.getPetUUID(), request.getChunkPosition(), true);
+                        request.setChunksForced(true);
+                    }
                     Entity entityFromChunk = serverLevel.getEntity(request.getPetUUID());
-                    te.entityLoadTimeout++;
                     //takes a while to load in entities from the forced chunk, be patient...
-                    if(entityFromChunk != null || te.entityLoadTimeout > 200){
-                        te.entityLoadTimeout = 0;
-                        if(entityFromChunk != null){
+                    if (entityFromChunk == null && request.tickWaitTime() <= timeout) {
+                        continue;
+                    }
+                    if (entityFromChunk != null) {
+                        // a pet already close to the lantern is left where it stands
+                        if (entityFromChunk.position().distanceToSqr(Vec3.atCenterOf(pos)) > NEARBY_DIST_SQR) {
+                            entityFromChunk.ejectPassengers();
+                            entityFromChunk.stopRiding();
                             BlockPos putAt = getPlaceFor(entityFromChunk, pos, level.random);
                             entityFromChunk.teleportTo(putAt.getX() + 0.5F, putAt.getY(), putAt.getZ() + 0.5F);
-                            Entity owner = TameableUtils.getOwnerOf(entityFromChunk);
-                            if(owner instanceof Player){
-                                ((Player)owner).displayClientMessage(Component.translatable("message.domesticationinnovation.wayward_lantern_return", entityFromChunk.getName()), false);
-                            }
-                            te.finishedRequests.add(request.getPetUUID());
+                            notifyOwner(entityFromChunk);
                         }
-                        loadChunksAround(serverLevel, request.getPetUUID(), request.getChunkPosition(), false);
+                    } else if (DomesticationMod.CONFIG.lanternCrashSafeRespawn.get() && request.getEntitySnapshot() != null) {
+                        // the chunks loaded but the pet is gone (crash mid-save, corrupted region...)
+                        // - rebuild it from the snapshot taken when it unloaded
+                        Entity rebuilt = rebuildFromSnapshot(serverLevel, pos, request);
+                        if (rebuilt != null) {
+                            notifyOwner(rebuilt);
+                        }
+                    }
+                    loadChunksAround(serverLevel, request.getPetUUID(), request.getChunkPosition(), false);
+                    request.setChunksForced(false);
+                    iterator.remove();
+                    if (data != null) {
+                        data.removeMatchingLanternRequests(request.getPetUUID());
                     }
                 }
             }
         }
+    }
+
+    private static void notifyOwner(Entity pet) {
+        Entity owner = TameableUtils.getOwnerOf(pet);
+        if (owner instanceof Player) {
+            ((Player) owner).displayClientMessage(Component.translatable("message.domesticationinnovation.wayward_lantern_return", pet.getName()), false);
+        }
+    }
+
+    private static Entity rebuildFromSnapshot(ServerLevel serverLevel, BlockPos lanternPos, LanternRequest request) {
+        EntityType type = request.getEntityType();
+        if (type == null) {
+            return null;
+        }
+        Entity entity = type.create(serverLevel);
+        if (!(entity instanceof LivingEntity living)) {
+            if (entity != null) {
+                entity.discard();
+            }
+            return null;
+        }
+        living.readAdditionalSaveData(request.getEntitySnapshot());
+        DIAttachments.readPetDataFrom(living, request.getEntitySnapshot());
+        // the original UUID is kept so bed claims and any future requests still point at this pet
+        living.setUUID(request.getPetUUID());
+        if (!request.getNametag().isEmpty()) {
+            living.setCustomName(Component.translatable(request.getNametag()));
+        }
+        BlockPos putAt = getPlaceFor(living, lanternPos, serverLevel.random);
+        living.moveTo(putAt.getX() + 0.5D, putAt.getY(), putAt.getZ() + 0.5D, living.getYRot(), living.getXRot());
+        if (!serverLevel.addFreshEntity(living)) {
+            living.discard();
+            return null;
+        }
+        return living;
     }
 
     private static void loadChunksAround(ServerLevel serverLevel, UUID ticket, BlockPos center, boolean load){

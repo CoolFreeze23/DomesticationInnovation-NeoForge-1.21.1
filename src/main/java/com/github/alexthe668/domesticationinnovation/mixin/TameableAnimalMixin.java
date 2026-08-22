@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.mixin;
 
+import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.enchantment.DIEnchantmentKeys;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
 import net.minecraft.core.BlockPos;
@@ -45,6 +46,20 @@ public abstract class TameableAnimalMixin extends Animal {
     private void di_canTeleportTo(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if(TameableUtils.hasEnchant(this, DIEnchantmentKeys.AMPHIBIOUS) && this.level().isWaterAt(pos)){
             cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(
+            method = {"Lnet/minecraft/world/entity/TamableAnimal;shouldTryTeleportToOwner()Z"},
+            remap = true,
+            at = @At(
+                    value = "HEAD"
+            ),
+            cancellable = true
+    )
+    private void di_shouldTryTeleportToOwner(CallbackInfoReturnable<Boolean> cir) {
+        if(DomesticationMod.CONFIG.disablePetTeleportation.get()){
+            cir.setReturnValue(false);
         }
     }
 }

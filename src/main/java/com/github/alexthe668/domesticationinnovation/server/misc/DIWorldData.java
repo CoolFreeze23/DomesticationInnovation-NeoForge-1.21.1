@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.server.misc;
 
+import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -31,19 +32,32 @@ public class DIWorldData extends SavedData {
 
     public static DIWorldData load(CompoundTag nbt, net.minecraft.core.HolderLookup.Provider registries) {
         DIWorldData data = new DIWorldData();
+        // each entry is parsed independently so one corrupt entry (e.g. from a removed mod)
+        // is logged and skipped instead of discarding every pending request in the world
         if (nbt.contains("RespawnList")) {
             ListTag listtag = nbt.getList("RespawnList", 10);
             for (int i = 0; i < listtag.size(); ++i) {
-                CompoundTag innerTag = listtag.getCompound(i);
-                data.respawnRequestList.add(new RespawnRequest(innerTag.getString("EntityType"), innerTag.getString("DimensionIn"), innerTag.getCompound("EntityData"),
-                        new BlockPos(innerTag.getInt("X"), innerTag.getInt("Y"), innerTag.getInt("Z")), innerTag.getLong("Timestamp"), innerTag.getString("EntityNametag")));
+                try {
+                    CompoundTag innerTag = listtag.getCompound(i);
+                    data.respawnRequestList.add(new RespawnRequest(innerTag.getString("EntityType"), innerTag.getString("DimensionIn"), innerTag.getCompound("EntityData"),
+                            new BlockPos(innerTag.getInt("X"), innerTag.getInt("Y"), innerTag.getInt("Z")), innerTag.getLong("Timestamp"), innerTag.getString("EntityNametag")));
+                } catch (Exception e) {
+                    DomesticationMod.LOGGER.error("Skipping malformed pet respawn entry {} in world data", i, e);
+                }
             }
         }
         if (nbt.contains("LanternList")) {
             ListTag listtag = nbt.getList("LanternList", 10);
             for (int i = 0; i < listtag.size(); ++i) {
-                CompoundTag innerTag = listtag.getCompound(i);
-                data.lanternRequestList.add(new LanternRequest(innerTag.getUUID("PetUUID"), innerTag.getString("EntityType"), innerTag.getUUID("OwnerUUID"), new BlockPos(innerTag.getInt("X"), innerTag.getInt("Y"), innerTag.getInt("Z")), innerTag.getLong("Timestamp"), innerTag.getString("EntityNametag")));
+                try {
+                    CompoundTag innerTag = listtag.getCompound(i);
+                    CompoundTag snapshot = innerTag.contains("EntityData", 10) ? innerTag.getCompound("EntityData") : null;
+                    data.lanternRequestList.add(new LanternRequest(innerTag.getUUID("PetUUID"), innerTag.getString("EntityType"), innerTag.getUUID("OwnerUUID"),
+                            new BlockPos(innerTag.getInt("X"), innerTag.getInt("Y"), innerTag.getInt("Z")), innerTag.getLong("Timestamp"), innerTag.getString("EntityNametag"),
+                            innerTag.getString("DimensionIn"), snapshot));
+                } catch (Exception e) {
+                    DomesticationMod.LOGGER.error("Skipping malformed wayward lantern entry {} in world data", i, e);
+                }
             }
         }
         return data;
@@ -79,6 +93,12 @@ public class DIWorldData extends SavedData {
                 tag.putInt("X", request.getChunkPosition().getX());
                 tag.putInt("Y", request.getChunkPosition().getY());
                 tag.putInt("Z", request.getChunkPosition().getZ());
+                if (!request.getDimension().isEmpty()) {
+                    tag.putString("DimensionIn", request.getDimension());
+                }
+                if (request.getEntitySnapshot() != null) {
+                    tag.put("EntityData", request.getEntitySnapshot());
+                }
                 listTag.add(tag);
             }
             compound.put("LanternList", listTag);

@@ -38,12 +38,10 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.Ravager;
 import net.minecraft.world.entity.npc.VillagerTrades;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
@@ -71,6 +69,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.village.VillagerTradesEvent;
 
+import javax.annotation.Nullable;
 import java.util.*;
 import java.util.function.Predicate;
 
@@ -98,6 +97,16 @@ public class CommonProxy {
 
     private static final ResourceLocation FROST_FANG_SLOW_ID =
             ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "frost_fang_slow");
+    // Same ids the collar-update path uses, so a join-time refresh replaces
+    // whatever an earlier session left on the entity
+    private static final ResourceLocation HEALTH_BOOST_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "health_boost");
+    private static final ResourceLocation SPEED_BOOST_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "speed_boost");
+    private static final ResourceLocation AMPHIBIOUS_LAND_SPEED_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "amphibious_land_speed");
+    private static final ResourceLocation BINDING_CURSE_ID = ResourceLocation.withDefaultNamespace("binding_curse");
+    private static final ResourceLocation VANISHING_CURSE_ID = ResourceLocation.withDefaultNamespace("vanishing_curse");
     private static final TargetingConditions ZOMBIE_TARGET = TargetingConditions.forCombat().range(32.0D);
 
     // Pets pending cross-dimension teleportation, cleared each tick
@@ -155,6 +164,9 @@ public class CommonProxy {
     @SubscribeEvent
     public void onEntityJoinLevel(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof LivingEntity living && TameableUtils.couldBeTamed(living)) {
+            if (!living.level().isClientSide && TameableUtils.hasAnyEnchants(living)) {
+                refreshEnchantAttributeModifiers(living);
+            }
             if (TameableUtils.hasEnchant(living, DIEnchantmentKeys.HEALTH_BOOST)) {
                 living.setHealth((float) Math.max(living.getHealth(), TameableUtils.getSafePetHealth(living)));
             }
@@ -164,7 +176,64 @@ public class CommonProxy {
                     data.removeMatchingLanternRequests(living.getUUID());
                 }
             }
+            // Drop or adopt the stored bed link if the bed changed while unloaded
+            PetBedBlockEntity.revalidateBedLink(living);
         }
+    }
+
+    /**
+     * Recomputes the enchant-driven attribute modifiers from the stored enchant
+     * tag every time the entity enters a level. The modifiers are added as
+     * transient (unsaved) values and any previously serialized copy is removed
+     * first, so config changes and power-multiplier tweaks take effect on load
+     * and stale values never accumulate in entity NBT. The amounts must stay in
+     * step with the ones applied when a collar is updated (TameableUtils).
+     */
+    private void refreshEnchantAttributeModifiers(LivingEntity living) {
+        AttributeInstance health = living.getAttribute(Attributes.MAX_HEALTH);
+        AttributeInstance speed = living.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (health == null && speed == null) return;
+
+        float oldMax = living.getMaxHealth();
+        float healthFraction = oldMax > 0 ? living.getHealth() / oldMax : 1.0F;
+
+        double powerMult = DomesticationMod.CONFIG.enchantPowerMultiplier.get();
+        int healthLevel = TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.HEALTH_BOOST);
+        int speedLevel = TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.SPEEDSTER);
+        boolean amphibiousOnLand = TameableUtils.hasEnchant(living, DIEnchantmentKeys.AMPHIBIOUS)
+                && !living.isInWaterOrBubble() && isWaterCategory(living);
+
+        if (health != null) {
+            health.removeModifier(HEALTH_BOOST_MODIFIER_ID);
+            if (healthLevel > 0) {
+                health.addTransientModifier(new AttributeModifier(HEALTH_BOOST_MODIFIER_ID,
+                        healthLevel * 10 * powerMult, AttributeModifier.Operation.ADD_VALUE));
+            }
+        }
+        if (speed != null) {
+            speed.removeModifier(SPEED_BOOST_MODIFIER_ID);
+            if (speedLevel > 0) {
+                speed.addTransientModifier(new AttributeModifier(SPEED_BOOST_MODIFIER_ID,
+                        speedLevel * 0.075 * powerMult, AttributeModifier.Operation.ADD_VALUE));
+            }
+            speed.removeModifier(AMPHIBIOUS_LAND_SPEED_MODIFIER_ID);
+            if (amphibiousOnLand) {
+                speed.addTransientModifier(new AttributeModifier(AMPHIBIOUS_LAND_SPEED_MODIFIER_ID,
+                        0.13, AttributeModifier.Operation.ADD_VALUE));
+            }
+        }
+
+        // Keep the health bar at the same fill level when max health shifts
+        if (health != null && living.getMaxHealth() != oldMax) {
+            living.setHealth(healthFraction * living.getMaxHealth());
+        }
+    }
+
+    private static boolean isWaterCategory(LivingEntity living) {
+        MobCategory category = living.getType().getCategory();
+        return category == MobCategory.WATER_CREATURE
+                || category == MobCategory.UNDERGROUND_WATER_CREATURE
+                || category == MobCategory.WATER_AMBIENT;
     }
 
     @SubscribeEvent
@@ -178,8 +247,14 @@ public class CommonProxy {
             DIWorldData data = DIWorldData.get(living.level());
             if (data != null) {
                 String entityTypeKey = BuiltInRegistries.ENTITY_TYPE.getKey(living.getType()).toString();
+                // Snapshot the pet like the death path does, so the lantern can
+                // rebuild it if the entity itself is unrecoverable later
+                CompoundTag snapshot = new CompoundTag();
+                living.addAdditionalSaveData(snapshot);
+                DIAttachments.writePetDataTo(living, snapshot);
                 LanternRequest request = new LanternRequest(living.getUUID(), entityTypeKey, ownerUUID,
-                        living.blockPosition(), living.level().dayTime(), saveName);
+                        living.blockPosition(), living.level().dayTime(), saveName,
+                        living.level().dimension().toString(), snapshot);
                 data.addLanternRequest(request);
             }
         }
@@ -222,6 +297,8 @@ public class CommonProxy {
             iterator.remove();
 
             Entity entity = pending.entity();
+            // A pet that died while queued must not be resurrected in the target level
+            if (!entity.isAlive()) continue;
             UUID ownerUUID = pending.ownerUUID();
             entity.unRide();
 
@@ -326,12 +403,24 @@ public class CommonProxy {
         tickFrostFangSlow(living);
 
         // Pet collar enchantment ticking
-        if (!TameableUtils.couldBeTamed(living) || !canTickCollar(living)) return;
+        if (!TameableUtils.couldBeTamed(living)) return;
 
-        tickDefensiveEnchants(living);
-        tickCombatEnchants(living);
-        tickUtilityEnchants(living);
-        tickCurseEnchants(living);
+        // Periodic bed-link revalidation, staggered by entity id so beds
+        // broken or claimed elsewhere are noticed without a per-tick cost
+        if (!living.level().isClientSide && (living.tickCount + living.getId()) % 200 == 0) {
+            PetBedBlockEntity.revalidateBedLink(living);
+        }
+
+        if (!canTickCollar(living)) return;
+
+        // One cheap attachment peek gates the enchant ticks for the common
+        // case of wild/unenchanted animals
+        if (TameableUtils.hasAnyEnchantsCheap(living)) {
+            tickDefensiveEnchants(living);
+            tickCombatEnchants(living);
+            tickUtilityEnchants(living);
+            tickCurseEnchants(living);
+        }
         tickZombiePetAI(living);
     }
 
@@ -460,8 +549,9 @@ public class CommonProxy {
             TameableUtils.scareRandomMonsters(living, TameableUtils.getEnchantLevel(living, DIEnchantmentKeys.INTIMIDATION));
         }
 
-        // Rejuvenation - absorb XP
-        if (TameableUtils.hasEnchant(living, DIEnchantmentKeys.REJUVENATION)) {
+        // Rejuvenation - absorb XP; the tick event still fires during the death
+        // animation, and a dying pet must not eat orbs or get its health raised
+        if (living.isAlive() && TameableUtils.hasEnchant(living, DIEnchantmentKeys.REJUVENATION)) {
             TameableUtils.absorbExpOrbs(living);
         }
 
@@ -720,6 +810,13 @@ public class CommonProxy {
 
     @SubscribeEvent
     public void onLivingIncomingDamage(LivingIncomingDamageEvent event) {
+        // A hit the target's shield will fully block deals no damage, so it must
+        // neither consume defensive resources nor set off on-hit enchant effects.
+        // This event fires before vanilla resolves the block, hence the pre-check.
+        if (event.getAmount() > 0.0F && event.getEntity().isDamageSourceBlocked(event.getSource())) {
+            return;
+        }
+
         // --- Defensive enchantments on the target ---
         if (TameableUtils.isTamed(event.getEntity()) && !event.getSource().is(DIDamageTypes.SIPHON)) {
             boolean blocked = false;
@@ -944,7 +1041,7 @@ public class CommonProxy {
 
         // Pet bed respawn registration
         BlockPos bedPos = TameableUtils.getPetBedPos(event.getEntity());
-        if (bedPos != null) {
+        if (bedPos != null && DomesticationMod.CONFIG.petBedRespawns.get()) {
             CompoundTag data = new CompoundTag();
             event.getEntity().addAdditionalSaveData(data);
             DIAttachments.writePetDataTo(event.getEntity(), data);
@@ -955,6 +1052,26 @@ public class CommonProxy {
             DIWorldData worldData = DIWorldData.get(event.getEntity().level());
             if (worldData != null) {
                 worldData.addRespawnRequest(request);
+            }
+        } else if (bedPos != null) {
+            // No respawn coming, so the pet's death frees its bed for another pet
+            if (!event.getEntity().level().isClientSide) {
+                PetBedBlockEntity.releaseClaim(event.getEntity().level(), bedPos, event.getEntity().getUUID());
+            }
+        } else if (DomesticationMod.CONFIG.collarDropsOnDeath.get()
+                && !event.getEntity().level().isClientSide
+                && TameableUtils.hasCollar(event.getEntity())
+                && !willResurrectAsZombiePet(event.getEntity())) {
+            // No bed to respawn from and no zombie copy to inherit the collar
+            // data, so return the collar itself - unless its curse vanishes it
+            Map<ResourceLocation, Integer> enchants = TameableUtils.getEnchants(event.getEntity());
+            if (enchants == null || !enchants.containsKey(VANISHING_CURSE_ID)) {
+                ItemStack collar = rebuildCollarStack(event.getEntity(), enchants);
+                if (event.getEntity().hasCustomName()) {
+                    collar.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                            event.getEntity().getCustomName());
+                }
+                event.getEntity().spawnAtLocation(collar);
             }
         }
 
@@ -969,11 +1086,31 @@ public class CommonProxy {
         }
 
         // Undead curse - zombie pet resurrection
-        if (event.getEntity() instanceof Mob mob
-                && event.getEntity().level().getDifficulty() != Difficulty.PEACEFUL
-                && TameableUtils.hasEnchant(mob, DIEnchantmentKeys.UNDEAD_CURSE)) {
-            spawnZombiePet(mob);
+        if (willResurrectAsZombiePet(event.getEntity())) {
+            spawnZombiePet((Mob) event.getEntity());
         }
+    }
+
+    private static boolean willResurrectAsZombiePet(LivingEntity entity) {
+        return entity instanceof Mob
+                && entity.level().getDifficulty() != Difficulty.PEACEFUL
+                && TameableUtils.hasEnchant(entity, DIEnchantmentKeys.UNDEAD_CURSE);
+    }
+
+    /**
+     * Rebuilds a collar tag item carrying the given stored enchantments, for
+     * returning a pet's collar to the world (swap and death paths).
+     */
+    private static ItemStack rebuildCollarStack(LivingEntity living, @Nullable Map<ResourceLocation, Integer> enchants) {
+        ItemStack collar = new ItemStack(DIItemRegistry.COLLAR_TAG.get());
+        if (enchants != null && !enchants.isEmpty()) {
+            var registry = living.level().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+            for (Map.Entry<ResourceLocation, Integer> entry : enchants.entrySet()) {
+                var holder = registry.get(ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT, entry.getKey()));
+                holder.ifPresent(h -> collar.enchant(h, entry.getValue()));
+            }
+        }
+        return collar;
     }
 
     private void spawnZombiePet(Mob mob) {
@@ -1044,15 +1181,21 @@ public class CommonProxy {
             return;
         }
 
+        // Sneaking steps aside from implicit pet interactions (command cycling,
+        // any-food feeding) so vanilla and other mods' shift-interactions can be
+        // reached. Deliberate item uses - collar tags, deeds - still go through.
+        boolean sneakBypass = player.isShiftKeyDown()
+                && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get();
+
         // Gluttonous - feed pet any food to heal
-        if (entity instanceof LivingEntity living && TameableUtils.isTamed(entity)
+        if (!sneakBypass && entity instanceof LivingEntity living && TameableUtils.isTamed(entity)
                 && TameableUtils.hasEnchant(living, DIEnchantmentKeys.GLUTTONOUS)) {
             if (handleGluttonousFeeding(player, living, stack, event)) return;
         }
 
         // Rabbit taming
         if (entity instanceof Rabbit rabbit && DomesticationMod.CONFIG.tameableRabbit.get()) {
-            if (handleRabbitInteraction(player, rabbit, stack, event)) return;
+            if (handleRabbitInteraction(player, rabbit, stack, event, sneakBypass)) return;
         }
 
         // Collar tag application
@@ -1115,7 +1258,7 @@ public class CommonProxy {
     }
 
     private boolean handleRabbitInteraction(Player player, Rabbit rabbit, ItemStack stack,
-                                            PlayerInteractEvent.EntityInteract event) {
+                                            PlayerInteractEvent.EntityInteract event, boolean sneakBypass) {
         if (stack.getItem() == Items.HAY_BLOCK) {
             if (TameableUtils.isTamed(rabbit) && rabbit.getHealth() < rabbit.getMaxHealth()) {
                 rabbit.heal(3);
@@ -1153,7 +1296,7 @@ public class CommonProxy {
                 return true;
             }
         }
-        if (TameableUtils.isTamed(rabbit) && TameableUtils.isPetOf(player, rabbit)) {
+        if (!sneakBypass && TameableUtils.isTamed(rabbit) && TameableUtils.isPetOf(player, rabbit)) {
             ((ModifedToBeTameable) rabbit).playerSetCommand(player, rabbit);
         }
         return false;
@@ -1165,6 +1308,20 @@ public class CommonProxy {
             // Read enchantments from the collar tag item
             var itemEnchants = stack.getEnchantments();
             Map<ResourceLocation, Integer> existingEnchants = TameableUtils.getEnchants(living);
+
+            // A collar bound by its curse cannot be swapped off the pet; refuse
+            // without consuming the new tag
+            if (TameableUtils.hasCollar(living) && existingEnchants != null
+                    && existingEnchants.containsKey(BINDING_CURSE_ID)) {
+                living.playSound(SoundEvents.VILLAGER_NO, 1.0F, living.getVoicePitch());
+                if (living.level() instanceof ServerLevel serverLevel) {
+                    serverLevel.sendParticles(ParticleTypes.SMOKE,
+                            living.getX(), living.getY(0.5D), living.getZ(), 5, 0.3D, 0.3D, 0.3D, 0.02D);
+                }
+                event.setCanceled(true);
+                event.setCancellationResult(InteractionResult.FAIL);
+                return;
+            }
 
             // Applying a collar identical to the pet's current one (same name,
             // same enchantments) is a no-op - don't consume the item
@@ -1190,19 +1347,12 @@ public class CommonProxy {
                 }
             }
 
-            // Drop the old collar if entity already has one
+            // Drop the old collar if entity already has one; a vanishing curse
+            // destroys it instead of returning it
             blockCollarTick(living);
-            if (TameableUtils.hasCollar(living)) {
-                ItemStack oldCollar = new ItemStack(DIItemRegistry.COLLAR_TAG.get());
-                if (existingEnchants != null && !existingEnchants.isEmpty()) {
-                    for (Map.Entry<ResourceLocation, Integer> entry : existingEnchants.entrySet()) {
-                        // Store enchantments on the dropped collar item using vanilla enchantment system
-                        var registry = living.level().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
-                        var holder = registry.get(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT, entry.getKey()));
-                        holder.ifPresent(h -> oldCollar.enchant(h, entry.getValue()));
-                    }
-                }
-                living.spawnAtLocation(oldCollar);
+            if (TameableUtils.hasCollar(living)
+                    && (existingEnchants == null || !existingEnchants.containsKey(VANISHING_CURSE_ID))) {
+                living.spawnAtLocation(rebuildCollarStack(living, existingEnchants));
             }
 
             // Apply name from collar tag
@@ -1243,22 +1393,6 @@ public class CommonProxy {
                 && event.getLevel().getBlockEntity(event.getPos()) instanceof PetBedBlockEntity bedEntity) {
             bedEntity.removeAllRequestsFor(event.getPlayer());
             bedEntity.resetBedsForNearbyPets();
-        }
-    }
-
-    // =========================================================================
-    // Mob spawn - ravager rabbit fear
-    // =========================================================================
-
-    @SubscribeEvent
-    public void onMobSpawn(FinalizeSpawnEvent event) {
-        try {
-            if (event.getEntity() instanceof Ravager ravager && DomesticationMod.CONFIG.rabbitsScareRavagers.get()) {
-                ravager.goalSelector.addGoal(4, new AvoidEntityGoal<>(ravager, Rabbit.class,
-                        13.0F, 1.5D, 2.0D));
-            }
-        } catch (Exception e) {
-            DomesticationMod.LOGGER.warn("Could not add rabbit avoidance AI to ravager", e);
         }
     }
 

@@ -50,7 +50,10 @@ public class PetBedBlock extends BaseEntityBlock {
 
     public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         if(TameableUtils.isTamed(entity) && !entity.getType().is(DITagRegistry.REFUSES_PET_BEDS) && !level.isClientSide && DomesticationMod.CONFIG.petBedRespawns.get()){
-           if((entity.tickCount + entity.getId()) % 10 == 0 && random.nextInt(6) == 0){
+           // a pet with no bed yet settles into an unclaimed bed right away; re-binding an
+           // already-bedded pet keeps the old occasional roll
+           if((entity.tickCount + entity.getId()) % 10 == 0 && (seeksBed((LivingEntity) entity) || random.nextInt(6) == 0)
+                   && PetBedBlockEntity.tryClaim(level, pos, (LivingEntity) entity)){
                TameableUtils.setPetBedPos((LivingEntity) entity, pos);
                TameableUtils.setPetBedDimension((LivingEntity) entity, level.dimension().toString());
                Vec3 look = new Vec3(0, 0, -entity.getBbWidth()).yRot((float)Math.toRadians(180f - entity.getYHeadRot()));
@@ -66,6 +69,10 @@ public class PetBedBlock extends BaseEntityBlock {
            }
         }
         super.entityInside(state, level, pos, entity);
+    }
+
+    private static boolean seeksBed(LivingEntity entity) {
+        return DomesticationMod.CONFIG.exclusivePetBeds.get() && TameableUtils.getPetBedPos(entity) == null;
     }
 
     @Override

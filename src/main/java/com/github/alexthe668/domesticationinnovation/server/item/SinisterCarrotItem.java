@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.server.item;
 
+import com.github.alexthe668.domesticationinnovation.server.entity.DIAttachments;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -45,6 +46,7 @@ public class SinisterCarrotItem extends Item {
             horse.playSound(SoundEvents.ZOMBIE_INFECT, 0.8F, horse.getVoicePitch());
             CompoundTag horseExtras = new CompoundTag();
             horse.addAdditionalSaveData(horseExtras);
+            DIAttachments.writePetDataTo(horse, horseExtras);
             for(int i = 0; i < 6 + horse.getRandom().nextInt(5); i++){
                 horse.level().addParticle(ParticleTypes.SNEEZE, horse.getRandomX(1.0F), horse.getRandomY(), horse.getRandomZ(1.0F), 0F, 0F, 0F);
             }
@@ -60,6 +62,7 @@ public class SinisterCarrotItem extends Item {
                 skeleton.setCustomNameVisible(horse.isCustomNameVisible());
             }
             skeleton.readAdditionalSaveData(horseExtras);
+            DIAttachments.readPetDataFrom(skeleton, horseExtras);
             skeleton.setPersistenceRequired();
             net.neoforged.neoforge.event.EventHooks.onLivingConvert(horse, skeleton);
             player.level().addFreshEntity(skeleton);

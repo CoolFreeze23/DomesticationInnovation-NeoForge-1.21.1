@@ -28,11 +28,15 @@ public class OwnerHurtTarget2Goal extends TargetGoal {
             } else {
                 this.ownerLastHurt = livingentity.getLastHurtMob();
                 int i = livingentity.getLastHurtMobTimestamp();
-                return i != this.timestamp && this.canAttack(this.ownerLastHurt, TargetingConditions.DEFAULT) && ((ModifedToBeTameable)this.tameAnimal).isValidAttackTarget(this.ownerLastHurt);
+                return i != this.timestamp && PetCombatRules.wantsToFight(this.tameAnimal, this.ownerLastHurt) && this.canAttack(this.ownerLastHurt, TargetingConditions.DEFAULT) && ((ModifedToBeTameable)this.tameAnimal).isValidAttackTarget(this.ownerLastHurt);
             }
         } else {
             return false;
         }
+    }
+
+    public boolean canContinueToUse() {
+        return PetCombatRules.wantsToFight(this.tameAnimal, this.mob.getTarget()) && super.canContinueToUse();
     }
 
     public void start() {

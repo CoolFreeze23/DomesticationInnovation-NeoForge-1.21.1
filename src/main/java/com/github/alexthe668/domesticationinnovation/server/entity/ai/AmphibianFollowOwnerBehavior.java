@@ -1,5 +1,6 @@
 package com.github.alexthe668.domesticationinnovation.server.entity.ai;
 
+import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.enchantment.DIEnchantmentKeys;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
@@ -52,7 +53,7 @@ public class AmphibianFollowOwnerBehavior<T extends Animal> extends Behavior<T> 
     }
 
     protected void tick(ServerLevel p_23503_, T axolotl, long gameTime) {
-        if (axolotl.distanceToSqr(this.owner) >= 144.0D) {
+        if (axolotl.distanceToSqr(this.owner) >= 144.0D && !DomesticationMod.CONFIG.disablePetTeleportation.get()) {
             this.teleportToOwner(axolotl);
         } else{
             int speedsterLevel = TameableUtils.getEnchantLevel(axolotl, DIEnchantmentKeys.SPEEDSTER);

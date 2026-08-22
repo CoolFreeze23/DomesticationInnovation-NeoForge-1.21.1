@@ -11,6 +11,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -27,6 +28,7 @@ import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.animal.axolotl.Axolotl;
 import net.minecraft.world.entity.animal.frog.Frog;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -284,43 +286,38 @@ public class TameableUtils {
     // =========================================================================
 
     /**
-     * Decoded StoredPetEnchantments lists, one weak map per logical side.
-     * Enchant levels are queried ~20 times per pet per tick; decoding the NBT
-     * list once and reusing it until the list instance changes avoids
-     * re-parsing on every call. Entity.equals/hashCode compare entity ids,
-     * which repeat between a ClientLevel and the integrated server's levels,
-     * so a single shared map would make the two sides continually evict each
-     * other's entries for the same pet - hence the per-side split.
-     * Server-side writes invalidate via setEnchantmentTag; client-side sync
-     * replaces the whole attachment tag, which the list-identity check catches.
+     * Decoded StoredPetEnchantments live on the entity itself as a transient
+     * attachment (DIAttachments.DECODED_ENCHANTS). Enchant levels are queried
+     * ~20 times per pet per tick, so a read must not re-parse NBT: it is one
+     * getExistingData lookup plus a ListTag identity check. Every path that
+     * replaces the pet data tag (server setters, the client sync packet,
+     * snapshot restore, death copy) installs a different ListTag instance,
+     * which the identity check catches; addEnchant edits the list in place,
+     * which setEnchantmentTag covers by storing a freshly decoded holder.
+     * Entity-resident storage means a ClientLevel entity and the integrated
+     * server's entity with the same id can never see each other's decode.
+     * Only called with a non-null list, so the attachment is only ever created
+     * for entities that actually carry enchant data.
      */
-    private static final Map<LivingEntity, DecodedEnchants> CLIENT_ENCHANT_CACHE =
-            Collections.synchronizedMap(new WeakHashMap<>());
-    private static final Map<LivingEntity, DecodedEnchants> SERVER_ENCHANT_CACHE =
-            Collections.synchronizedMap(new WeakHashMap<>());
-
-    private static Map<LivingEntity, DecodedEnchants> enchantCacheFor(LivingEntity entity) {
-        return entity.level().isClientSide() ? CLIENT_ENCHANT_CACHE : SERVER_ENCHANT_CACHE;
-    }
-
-    private record DecodedEnchants(ListTag source, Map<ResourceLocation, Integer> levels) {}
-
     private static Map<ResourceLocation, Integer> getDecodedEnchants(LivingEntity entity, ListTag listTag) {
-        Map<LivingEntity, DecodedEnchants> cache = enchantCacheFor(entity);
-        DecodedEnchants cached = cache.get(entity);
+        DIAttachments.DecodedEnchants cached = entity.getExistingData(DIAttachments.DECODED_ENCHANTS).orElse(null);
         if (cached == null || cached.source() != listTag) {
-            Map<ResourceLocation, Integer> levels = new HashMap<>();
-            for (int i = 0; i < listTag.size(); i++) {
-                CompoundTag entry = listTag.getCompound(i);
-                ResourceLocation id = ResourceLocation.tryParse(entry.getString("id"));
-                if (id != null) {
-                    levels.put(id, entry.getInt("lvl"));
-                }
-            }
-            cached = new DecodedEnchants(listTag, levels);
-            cache.put(entity, cached);
+            cached = decodeEnchants(listTag);
+            entity.setData(DIAttachments.DECODED_ENCHANTS, cached);
         }
         return cached.levels();
+    }
+
+    private static DIAttachments.DecodedEnchants decodeEnchants(ListTag listTag) {
+        Map<ResourceLocation, Integer> levels = new HashMap<>();
+        for (int i = 0; i < listTag.size(); i++) {
+            CompoundTag entry = listTag.getCompound(i);
+            ResourceLocation id = ResourceLocation.tryParse(entry.getString("id"));
+            if (id != null) {
+                levels.put(id, entry.getInt("lvl"));
+            }
+        }
+        return new DIAttachments.DecodedEnchants(listTag, levels);
     }
 
     /**
@@ -358,16 +355,28 @@ public class TameableUtils {
     }
 
     public static boolean hasAnyEnchants(LivingEntity entity) {
-        ListTag listTag = getEnchantmentList(entity);
-        return listTag != null && !listTag.isEmpty();
+        return hasAnyEnchantsCheap(entity);
+    }
+
+    /**
+     * Cheapest possible "does this entity carry collar enchants" check for the
+     * per-tick and per-frame hot paths: one attachment lookup, no allocation,
+     * no list parsing. The typical unenchanted animal fails at the null check.
+     */
+    public static boolean hasAnyEnchantsCheap(LivingEntity entity) {
+        CompoundTag tag = DIAttachments.peekPetData(entity);
+        return tag != null
+                && tag.get(ENCHANTMENT_TAG) instanceof ListTag list
+                && !list.isEmpty()
+                && list.getElementType() == Tag.TAG_COMPOUND;
     }
 
     @Nullable
     private static ListTag getEnchantmentList(LivingEntity entity) {
         // Read-only lookup: hasEnchant/getEnchantLevel are queried for arbitrary
         // living entities, so this must not attach a tag to non-pets
-        CompoundTag tag = DIAttachments.readPetData(entity);
-        return tag.contains(ENCHANTMENT_TAG) ? tag.getList(ENCHANTMENT_TAG, 10) : null;
+        CompoundTag tag = DIAttachments.peekPetData(entity);
+        return tag != null && tag.contains(ENCHANTMENT_TAG) ? tag.getList(ENCHANTMENT_TAG, 10) : null;
     }
 
     /**
@@ -405,11 +414,13 @@ public class TameableUtils {
 
     private static void setEnchantmentTag(LivingEntity entity, ListTag enchants) {
         Map<ResourceLocation, Integer> prevEnchants = getEnchants(entity);
-        enchantCacheFor(entity).remove(entity);
         CompoundTag tag = getPetTag(entity);
         tag.put(ENCHANTMENT_TAG, enchants);
         tag.putInt(COLLAR_SWAP_COOLDOWN, 20);
         tag.putBoolean(COLLAR_TAG, true);
+        // Decode eagerly: addEnchant edits the stored list in place, so the
+        // identity check alone would keep serving the stale holder
+        entity.setData(DIAttachments.DECODED_ENCHANTS, decodeEnchants(enchants));
         setPetTag(entity, tag);
         onUpdateEnchants(prevEnchants, entity);
     }
@@ -438,7 +449,7 @@ public class TameableUtils {
                 double amount = healthExtra * 10 * powerMult;
                 AttributeModifier mod = new AttributeModifier(HEALTH_BOOST_ID, amount, AttributeModifier.Operation.ADD_VALUE);
                 health.removeModifier(HEALTH_BOOST_ID);
-                health.addPermanentModifier(mod);
+                health.addTransientModifier(mod);
             } else {
                 health.removeModifier(HEALTH_BOOST_ID);
             }
@@ -449,14 +460,14 @@ public class TameableUtils {
                 double amount = speedExtra * 0.075 * powerMult;
                 AttributeModifier mod = new AttributeModifier(SPEED_BOOST_ID, amount, AttributeModifier.Operation.ADD_VALUE);
                 speed.removeModifier(SPEED_BOOST_ID);
-                speed.addPermanentModifier(mod);
+                speed.addTransientModifier(mod);
             } else {
                 speed.removeModifier(SPEED_BOOST_ID);
             }
             if (amphib) {
                 AttributeModifier mod = new AttributeModifier(SPEED_BOOST_AQUATIC_LAND_ID, 0.13, AttributeModifier.Operation.ADD_VALUE);
                 speed.removeModifier(SPEED_BOOST_AQUATIC_LAND_ID);
-                speed.addPermanentModifier(mod);
+                speed.addTransientModifier(mod);
             } else {
                 speed.removeModifier(SPEED_BOOST_AQUATIC_LAND_ID);
             }
@@ -639,7 +650,12 @@ public class TameableUtils {
     public static void setFallDistance(LivingEntity e, float d) {
         CompoundTag tag = getPetTag(e); tag.putFloat(FALL_DISTANCE_SYNC, d); setPetTag(e, tag);
     }
-    public static boolean isZombiePet(LivingEntity e) { return getPetTag(e).getBoolean(ZOMBIE_PET); }
+    // Queried per tick/frame for arbitrary living entities, so it must neither
+    // attach nor allocate for the non-pet majority
+    public static boolean isZombiePet(LivingEntity e) {
+        CompoundTag tag = DIAttachments.peekPetData(e);
+        return tag != null && tag.getBoolean(ZOMBIE_PET);
+    }
     public static void setZombiePet(LivingEntity e, boolean z) {
         CompoundTag tag = getPetTag(e); tag.putBoolean(ZOMBIE_PET, z); setPetTag(e, tag);
     }
@@ -691,7 +707,9 @@ public class TameableUtils {
 
     public static void aggroRandomMonsters(LivingEntity attractor) {
         if ((attractor.tickCount + attractor.getId()) % 400 != 0) return;
-        Predicate<Entity> notOnTeamMonster = a -> a instanceof Monster
+        // Enemy also covers slimes, phantoms, ghasts, hoglins, shulkers etc; false = Monster-only upstream parity
+        boolean allHostiles = DomesticationMod.CONFIG.infamyCurseAggrosAllHostiles.get();
+        Predicate<Entity> notOnTeamMonster = a -> (allHostiles ? a instanceof Enemy : a instanceof Monster)
                 && !hasSameOwnerAs((LivingEntity) a, attractor) && a.distanceTo(attractor) > 3 + attractor.getBbWidth() * 1.6F;
         List<Mob> list = attractor.level().getEntitiesOfClass(Mob.class,
                 attractor.getBoundingBox().inflate(20, 8, 20), EntitySelector.NO_SPECTATORS.and(notOnTeamMonster));

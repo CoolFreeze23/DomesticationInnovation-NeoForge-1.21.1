@@ -1,6 +1,7 @@
 package com.github.alexthe668.domesticationinnovation.mixin;
 import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTameable;
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.BedAnchoredStrollGoal;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -27,6 +28,15 @@ public abstract class WolfMixin extends TamableAnimal implements ModifedToBeTame
 
     protected WolfMixin(EntityType<? extends TamableAnimal> type, Level level) {
         super(type, level);
+    }
+
+    @Inject(
+            at = {@At("TAIL")},
+            remap = true,
+            method = {"Lnet/minecraft/world/entity/animal/Wolf;registerGoals()V"}
+    )
+    private void di_registerGoals(CallbackInfo ci) {
+        this.goalSelector.addGoal(7, new BedAnchoredStrollGoal(this));
     }
 
     @Inject(
@@ -68,7 +78,7 @@ public abstract class WolfMixin extends TamableAnimal implements ModifedToBeTame
             cancellable = true
     )
     private void di_onInteract(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-        if(DomesticationMod.CONFIG.trinaryCommandSystem.get()){
+        if(DomesticationMod.CONFIG.trinaryCommandSystem.get() && !(player.isShiftKeyDown() && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get())){
             this.jumping = false;
             this.navigation.stop();
             this.setTarget((LivingEntity)null);

@@ -2,11 +2,15 @@ package com.github.alexthe668.domesticationinnovation.server.entity;
 
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
+import javax.annotation.Nullable;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -49,6 +53,35 @@ public class DIAttachments {
             () -> AttachmentType.builder(() -> new CompoundTag()).build());
 
     /**
+     * Decoded view of a pet's StoredPetEnchantments list, paired with the exact
+     * ListTag instance it was decoded from so readers can tell at identity-check
+     * speed whether the decode is still current.
+     */
+    public record DecodedEnchants(ListTag source, Map<ResourceLocation, Integer> levels) {
+        static final DecodedEnchants EMPTY = new DecodedEnchants(new ListTag(), Map.of());
+    }
+
+    /**
+     * Transient (never saved, never synced) decoded-enchant holder, living on
+     * the entity so a level query is one attachment lookup plus an identity
+     * check instead of an NBT re-parse. Managed exclusively by
+     * {@link TameableUtils}; only entities that actually carry an enchant list
+     * ever get this attached.
+     */
+    public static final Supplier<AttachmentType<DecodedEnchants>> DECODED_ENCHANTS = DEF_REG.register("decoded_enchants",
+            () -> AttachmentType.builder(() -> DecodedEnchants.EMPTY).build());
+
+    /**
+     * Reads the pet data tag without creating the attachment, or null when the
+     * entity has none. The zero-allocation primitive behind {@link #readPetData}
+     * for hot paths that run for arbitrary living entities every tick/frame.
+     */
+    @Nullable
+    public static CompoundTag peekPetData(LivingEntity entity) {
+        return entity.getExistingData(PET_DATA).orElse(null);
+    }
+
+    /**
      * Reads the pet data tag without creating the attachment. Unlike
      * {@code entity.getData(PET_DATA)}, which permanently attaches (and saves) a
      * default empty tag on first read, this returns a throwaway empty tag for
@@ -57,7 +90,7 @@ public class DIAttachments {
      * keep using getData/setData.
      */
     public static CompoundTag readPetData(LivingEntity entity) {
-        CompoundTag existing = entity.getExistingData(PET_DATA).orElse(null);
+        CompoundTag existing = peekPetData(entity);
         return existing == null ? new CompoundTag() : existing;
     }
 

@@ -45,7 +45,7 @@ public class FollowOwner2Goal extends Goal {
         LivingEntity livingentity = ((ModifedToBeTameable) this.tamable).getTameOwner();
         if(tamable instanceof ModifedToBeTameable commandableMob && commandableMob.getCommand() != 2 && DomesticationMod.CONFIG.trinaryCommandSystem.get()) {
             return false;
-        }else if (livingentity == null) {
+        }else if (livingentity == null || !livingentity.isAlive()) {
             return false;
         } else if (livingentity.isSpectator()) {
             return false;
@@ -91,7 +91,7 @@ public class FollowOwner2Goal extends Goal {
         if (--this.timeToRecalcPath <= 0) {
             this.timeToRecalcPath = this.adjustedTickDelay(10);
             if (!this.tamable.isLeashed() && !this.tamable.isPassenger()) {
-                if (this.tamable.distanceToSqr(this.owner) >= 144.0D) {
+                if (this.tamable.distanceToSqr(this.owner) >= 144.0D && this.owner.isAlive() && !DomesticationMod.CONFIG.disablePetTeleportation.get()) {
                     this.teleportToOwner();
                 } else {
                     this.navigation.moveTo(this.owner, this.speedModifier);

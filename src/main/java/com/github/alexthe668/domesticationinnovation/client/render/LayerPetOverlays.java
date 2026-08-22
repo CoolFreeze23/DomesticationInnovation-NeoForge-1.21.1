@@ -118,6 +118,12 @@ public class LayerPetOverlays extends RenderLayer {
     public void render(PoseStack matrixStackIn, MultiBufferSource bufferIn, int packedLightIn, Entity entity, float limbSwing, float limbSwingAmount, float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
         if (TameableUtils.couldBeTamed(entity)) {
             LivingEntity living = (LivingEntity) entity;
+            // Every overlay below keys off a collar enchant except the zombie
+            // tint, and zombie pets have their enchants stripped - so wild or
+            // unenchanted animals bail before any per-enchant lookups
+            if (!TameableUtils.hasAnyEnchantsCheap(living) && !TameableUtils.isZombiePet(living)) {
+                return;
+            }
             float f = Mth.rotLerp(partialTicks, living.yBodyRotO, living.yBodyRot);
             float realAge = living.tickCount + partialTicks;
             if (TameableUtils.hasEnchant(living, DIEnchantmentKeys.IMMUNITY_FRAME) && TameableUtils.getImmuneTime((LivingEntity) entity) > 0) {
