@@ -1,0 +1,7 @@
+{
+  "entities": "minecraft:ocelot",
+  "items": {
+    "tag": "minecraft:cat_food"
+  },
+  "chance": 0.33
+}

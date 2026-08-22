@@ -9,11 +9,17 @@ import com.github.alexthe668.domesticationinnovation.server.enchantment.DIEnchan
 import com.github.alexthe668.domesticationinnovation.server.entity.*;
 import com.github.alexthe668.domesticationinnovation.server.item.DIItemRegistry;
 import com.github.alexthe668.domesticationinnovation.server.item.DeedOfOwnershipItem;
+import com.github.alexthe668.domesticationinnovation.server.entity.ai.GenericPetAI;
 import com.github.alexthe668.domesticationinnovation.server.misc.*;
+import com.github.alexthe668.domesticationinnovation.server.misc.data.TamingDefinition;
+import com.github.alexthe668.domesticationinnovation.server.misc.data.TransformationDefinition;
 import com.github.alexthe668.domesticationinnovation.server.misc.trades.*;
 import com.google.common.collect.ImmutableSet;
+import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Registry;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -30,6 +36,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -38,7 +45,9 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
+import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.monster.Enemy;
@@ -184,6 +193,11 @@ public class CommonProxy {
                 if (data != null) {
                     data.removeMatchingLanternRequests(living.getUUID());
                 }
+            }
+            // Goal selectors are rebuilt on load, so data-tamed pets need
+            // their generic AI re-installed every join (idempotent, server-only)
+            if (!living.level().isClientSide && living instanceof Mob mob && TameableUtils.isDataTamed(mob)) {
+                GenericPetAI.applyGenericPetAI(mob);
             }
             // Drop or adopt the stored bed link if the bed changed while unloaded
             PetBedBlockEntity.revalidateBedLink(living);
@@ -526,6 +540,12 @@ public class CommonProxy {
         // broken or claimed elsewhere are noticed without a per-tick cost
         if (!living.level().isClientSide && (living.tickCount + living.getId()) % 200 == 0) {
             PetBedBlockEntity.revalidateBedLink(living);
+        }
+
+        // Data-tamed brain mobs get their bed-anchored roaming via
+        // restrictTo instead of goal surgery
+        if (!living.level().isClientSide && living instanceof Mob mob && TameableUtils.isDataTamed(mob)) {
+            GenericPetAI.tickBrainRoamRestriction(mob);
         }
 
         if (!canTickCollar(living)) return;
@@ -1482,6 +1502,16 @@ public class CommonProxy {
         boolean sneakBypass = player.isShiftKeyDown()
                 && DomesticationMod.CONFIG.sneakBypassesPetInteractions.get();
 
+        // Datapack-driven taming and transformations run BEFORE every hardcoded
+        // species path so packs can override or extend them. Taming is a
+        // feeding-style implicit interaction and honors the sneak bypass;
+        // transformations are deliberate item uses (like collar tags) and
+        // still go through while sneaking.
+        if (entity instanceof Mob mob && DomesticationMod.CONFIG.dataDrivenTaming.get()) {
+            if (!sneakBypass && handleDataDrivenTaming(player, mob, stack, event)) return;
+            if (handleDataDrivenTransformation(player, mob, stack, event)) return;
+        }
+
         // Gluttonous - feed pet any food to heal
         if (!sneakBypass && entity instanceof LivingEntity living && TameableUtils.isTamed(entity)
                 && TameableUtils.hasEnchant(living, DIEnchantmentKeys.GLUTTONOUS)) {
@@ -1499,6 +1529,218 @@ public class CommonProxy {
             if (stack.is(DIItemRegistry.COLLAR_TAG.get()) && DomesticationMod.CONFIG.collarTag.get()) {
                 handleCollarTagApplication(player, living, stack, event);
             }
+        }
+
+        // Trinary command cycling for generic (datapack-tamed) pets. Species
+        // pets cycle inside their own mixin/handler paths; this only serves
+        // mobs with neither taming API, so those paths are never doubled.
+        if (!sneakBypass && DomesticationMod.CONFIG.trinaryCommandSystem.get()
+                && stack.isEmpty() && event.getHand() == InteractionHand.MAIN_HAND
+                && entity instanceof Mob mob
+                && !(mob instanceof ModifedToBeTameable) && !(mob instanceof TamableAnimal)
+                && TameableUtils.isDataTamed(mob) && TameableUtils.isPetOf(player, mob)) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+            if (!mob.level().isClientSide) {
+                int next = (Math.max(TameableUtils.tryGetCommand(mob), 0) + 1) % 3;
+                if (TameableUtils.trySetCommand(mob, next)) {
+                    mob.setTarget(null);
+                    mob.getNavigation().stop();
+                    player.displayClientMessage(
+                            Component.translatable("message.domesticationinnovation.command_" + next, mob.getName()), true);
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Datapack-driven taming and transformation (DIDataRegistries)
+    // =========================================================================
+
+    /**
+     * Generic taming from the domesticationinnovation:taming datapack registry.
+     * Returns true when a definition matched this click (whether or not the
+     * chance roll succeeded); the event is then cancelled and no other
+     * interaction path runs. All side effects are server-only.
+     */
+    private boolean handleDataDrivenTaming(Player player, Mob mob, ItemStack stack,
+                                           PlayerInteractEvent.EntityInteract event) {
+        if (!mob.isAlive() || TameableUtils.isTamed(mob)) return false;
+        // The blacklist tag is a hard veto no datapack entry can override
+        if (mob.getType().is(DIDataRegistries.TAMING_BLACKLIST)) return false;
+        Registry<TamingDefinition> registry =
+                mob.level().registryAccess().registry(DIDataRegistries.TAMING).orElse(null);
+        if (registry == null) return false;
+
+        TamingDefinition match = null;
+        for (TamingDefinition def : registry) {
+            // required_data serializes the mob, so it is checked last and only
+            // for entries that already match type + item
+            if (def.appliesTo(mob) && def.items().test(stack) && def.matchesRequiredData(mob)) {
+                match = def;
+                break;
+            }
+        }
+        if (match == null) return false;
+
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+        if (mob.level().isClientSide) return true;
+
+        // Consume the item before the roll (matches our species taming), and
+        // hand back any container generically - modded fish buckets included
+        if (!player.isCreative()) {
+            ItemStack remainder = stack.getCraftingRemainingItem();
+            stack.shrink(1);
+            if (!remainder.isEmpty()) {
+                if (stack.isEmpty()) {
+                    player.setItemInHand(event.getHand(), remainder);
+                } else if (!player.getInventory().add(remainder)) {
+                    player.drop(remainder, false);
+                }
+            }
+        }
+        mob.playSound(SoundEvents.GENERIC_EAT, 1.0F, mob.getVoicePitch());
+
+        ServerLevel serverLevel = (ServerLevel) mob.level();
+        if (mob.getRandom().nextFloat() < match.chance()) {
+            tameDataDrivenPet(player, mob);
+            sendTamingParticles(serverLevel, mob, ParticleTypes.HEART);
+            if (player instanceof ServerPlayer serverPlayer && mob instanceof Animal animal) {
+                CriteriaTriggers.TAME_ANIMAL.trigger(serverPlayer, animal);
+            }
+        } else {
+            sendTamingParticles(serverLevel, mob, ParticleTypes.SMOKE);
+        }
+        return true;
+    }
+
+    /**
+     * Grants ownership through the deepest API the mob actually has - vanilla
+     * TamableAnimal first, then our species interface, then the generic
+     * PET_DATA record - calms it down, and installs the generic pet AI.
+     */
+    private void tameDataDrivenPet(Player player, Mob mob) {
+        if (mob instanceof TamableAnimal tamable) {
+            tamable.setOwnerUUID(player.getUUID());
+            tamable.setTame(true, true);
+        } else if (mob instanceof ModifedToBeTameable modified) {
+            modified.setTame(true);
+            modified.setTameOwnerUUID(player.getUUID());
+            modified.setCommand(1);
+        } else {
+            TameableUtils.setDataTameOwner(mob, player.getUUID());
+        }
+        try {
+            mob.setTarget(null);
+            mob.setLastHurtByMob(null);
+            if (mob.getBrain().hasMemoryValue(MemoryModuleType.ATTACK_TARGET)) {
+                mob.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+            }
+        } catch (Exception ignored) {
+            // A modded brain that refuses memory access must not fail the tame
+        }
+        mob.getNavigation().stop();
+        mob.setPersistenceRequired();
+        GenericPetAI.applyGenericPetAI(mob);
+    }
+
+    /**
+     * Generic mob-to-mob conversion from the domesticationinnovation:transformation
+     * registry. Mirrors the Rotten Apple conversion body: equipment dropped
+     * before the snapshot, save-data plus PET_DATA carried to the result, name
+     * and health fraction preserved, original discarded.
+     */
+    private boolean handleDataDrivenTransformation(Player player, Mob mob, ItemStack stack,
+                                                   PlayerInteractEvent.EntityInteract event) {
+        if (!mob.isAlive()) return false;
+        Registry<TransformationDefinition> registry =
+                mob.level().registryAccess().registry(DIDataRegistries.TRANSFORMATION).orElse(null);
+        if (registry == null) return false;
+
+        TransformationDefinition match = null;
+        for (TransformationDefinition def : registry) {
+            if (def.appliesTo(mob) && def.triggerItem().test(stack) && def.matchesRequiredData(mob)) {
+                match = def;
+                break;
+            }
+        }
+        if (match == null) return false;
+
+        @SuppressWarnings("unchecked")
+        EntityType<? extends LivingEntity> resultType = (EntityType<? extends LivingEntity>) match.resultEntity();
+        if (!net.neoforged.neoforge.event.EventHooks.canLivingConvert(mob, resultType, timer -> {})) {
+            return false;
+        }
+
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.CONSUME);
+        if (mob.level().isClientSide) return true;
+
+        Entity created = match.resultEntity().create(mob.level());
+        if (!(created instanceof Mob result)) {
+            if (created != null) created.discard();
+            return true;
+        }
+
+        player.swing(event.getHand());
+        SoundEvent sound = match.sound().map(net.minecraft.core.Holder::value).orElse(SoundEvents.ZOMBIE_INFECT);
+        mob.playSound(sound, 0.8F, mob.getVoicePitch());
+
+        // Body gear (horse armor etc) is not always readable by the result
+        // type, so drop it instead of silently destroying it
+        if (!mob.getItemBySlot(EquipmentSlot.BODY).isEmpty()) {
+            mob.spawnAtLocation(mob.getItemBySlot(EquipmentSlot.BODY).copy());
+            mob.setItemSlot(EquipmentSlot.BODY, ItemStack.EMPTY);
+        }
+
+        float healthFraction = mob.getMaxHealth() > 0 ? mob.getHealth() / mob.getMaxHealth() : 1.0F;
+        CompoundTag extras = new CompoundTag();
+        mob.addAdditionalSaveData(extras);
+        DIAttachments.writePetDataTo(mob, extras);
+
+        if (mob.isLeashed()) {
+            result.setLeashedTo(mob.getLeashHolder(), true);
+        }
+        result.moveTo(mob.getX(), mob.getY(), mob.getZ(), mob.getYRot(), mob.getXRot());
+        result.setNoAi(mob.isNoAi());
+        result.setBaby(mob.isBaby());
+        if (mob.hasCustomName()) {
+            result.setCustomName(mob.getCustomName());
+            result.setCustomNameVisible(mob.isCustomNameVisible());
+        }
+        try {
+            result.readAdditionalSaveData(extras);
+        } catch (Exception e) {
+            // Cross-type snapshots can trip picky readers; the conversion
+            // still stands, the result just starts from type defaults
+            DomesticationMod.LOGGER.warn("Transformation result {} rejected copied data: {}",
+                    match.resultEntity(), e.toString());
+        }
+        DIAttachments.readPetDataFrom(result, extras);
+        result.setHealth(Math.max(1.0F, healthFraction * result.getMaxHealth()));
+        result.setPersistenceRequired();
+
+        for (int i = 0; i < 6 + mob.getRandom().nextInt(5); i++) {
+            ((ServerLevel) mob.level()).sendParticles(ParticleTypes.SNEEZE,
+                    mob.getRandomX(1.0F), mob.getRandomY(), mob.getRandomZ(1.0F), 1, 0, 0, 0, 0);
+        }
+        net.neoforged.neoforge.event.EventHooks.onLivingConvert(mob, result);
+        mob.level().addFreshEntity(result);
+        mob.discard();
+        if (!player.isCreative()) {
+            stack.shrink(1);
+        }
+        return true;
+    }
+
+    private static void sendTamingParticles(ServerLevel level, Mob mob, ParticleOptions particle) {
+        for (int i = 0; i < 7; ++i) {
+            level.sendParticles(particle,
+                    mob.getRandomX(1.0D), mob.getRandomY() + 0.5D, mob.getRandomZ(1.0D),
+                    1, mob.getRandom().nextGaussian() * 0.02D,
+                    mob.getRandom().nextGaussian() * 0.02D,
+                    mob.getRandom().nextGaussian() * 0.02D, 0.02D);
         }
     }
 

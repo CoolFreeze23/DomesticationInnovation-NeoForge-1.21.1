@@ -52,6 +52,7 @@ public class DIConfig {
     public final ModConfigSpec.BooleanValue lanternCrashSafeRespawn;
     public final ModConfigSpec.BooleanValue exclusivePetBeds;
     public final ModConfigSpec.BooleanValue infamyCurseAggrosAllHostiles;
+    public final ModConfigSpec.BooleanValue dataDrivenTaming;
 
     // Pet care
     public final ModConfigSpec.BooleanValue injuredPetsStopFighting;
@@ -103,6 +104,7 @@ public class DIConfig {
         lanternCrashSafeRespawn = builder.comment("true if a wayward lantern rebuilds a missing pet from its last saved snapshot when the pet's chunk loads without it").define("lantern_crash_safe_respawn", true);
         exclusivePetBeds = builder.comment("true if each pet bed belongs to one pet at a time and refuses others while its claim holds").define("exclusive_pet_beds", true);
         infamyCurseAggrosAllHostiles = builder.comment("true if the infamy curse draws every hostile mob (slimes, phantoms, ghasts, etc) to the pet; false limits it to regular monsters like the original mod").define("infamy_curse_aggros_all_hostiles", true);
+        dataDrivenTaming = builder.comment("true if datapack-defined taming and transformation entries (data/<namespace>/domesticationinnovation/taming and transformation) are applied when players interact with mobs").define("data_driven_taming", true);
         builder.pop();
 
         builder.push("pet_care");

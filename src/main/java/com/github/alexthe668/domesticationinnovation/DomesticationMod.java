@@ -40,6 +40,7 @@ public class DomesticationMod {
 
         modEventBus.addListener(this::setupClient);
         modEventBus.addListener(this::setup);
+        modEventBus.addListener(DIDataRegistries::onNewDataPackRegistry);
 
         // Register config
         modContainer.registerConfig(ModConfig.Type.COMMON, DIConfig.CONFIG_SPEC, "domestication-innovation.toml");

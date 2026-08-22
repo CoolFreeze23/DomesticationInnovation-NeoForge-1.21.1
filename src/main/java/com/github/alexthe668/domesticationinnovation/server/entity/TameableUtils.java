@@ -82,6 +82,10 @@ public class TameableUtils {
     private static final String ZOMBIE_PET = "ZombiePet";
     private static final String SAFE_PET_HEALTH = "SafePetHealth";
     private static final String COLLAR_SWAP_COOLDOWN = "CollarSwapCooldown";
+    // Generic pet layer (datapack taming): owner + command for mobs that have
+    // neither a species mixin nor the vanilla TamableAnimal API
+    private static final String GENERIC_TAME_OWNER = "GenericTameOwner";
+    private static final String GENERIC_COMMAND = "GenericCommand";
 
     // Attribute modifier IDs - NeoForge 1.21.1 uses ResourceLocation instead of UUID
     private static final ResourceLocation HEALTH_BOOST_ID = ResourceLocation.fromNamespaceAndPath(DomesticationMod.MODID, "health_boost");
@@ -133,6 +137,18 @@ public class TameableUtils {
             }
             return custom.getTameOwner().equals(target);
         }
+        // Generic pets have no owner-returning interface, so compare by UUID:
+        // the target IS the owner, or the target's own owner (any layer) matches
+        if (tameable instanceof Mob mob && isDataTamed(mob)) {
+            UUID owner = genericOwnerUUID(mob);
+            if (owner != null) {
+                if (owner.equals(target.getUUID())) {
+                    return true;
+                }
+                UUID targetOwner = getOwnerUUIDOf(target);
+                return targetOwner != null && owner.equals(targetOwner);
+            }
+        }
         return false;
     }
 
@@ -168,30 +184,94 @@ public class TameableUtils {
             return m.isTame() && DomesticationMod.CONFIG.tameableFrog.get();
         }
         return (entity instanceof ModifedToBeTameable m && m.isTame())
-                || (entity instanceof TamableAnimal t && t.isTame());
+                || (entity instanceof TamableAnimal t && t.isTame())
+                || (entity instanceof Mob mob && isDataTamed(mob));
     }
 
     public static boolean couldBeTamed(Entity entity) {
-        return entity instanceof ModifedToBeTameable || entity instanceof TamableAnimal;
+        // The generic arm must stay a cheap peek: this gate runs per tick for
+        // every living entity, and only mobs actually carrying generic owner
+        // data (i.e. data-tamed pets) may pass through it
+        return entity instanceof ModifedToBeTameable || entity instanceof TamableAnimal
+                || (entity instanceof Mob mob && isDataTamed(mob));
     }
 
     @Nullable
     public static Entity getOwnerOf(Entity entity) {
-        if (entity instanceof ModifedToBeTameable m) return m.getTameOwner();
-        if (entity instanceof TamableAnimal t) return t.getOwner();
+        // Real taming APIs answer first; the attachment-backed generic layer
+        // only speaks for mobs that have neither
+        if (entity instanceof ModifedToBeTameable m && m.getTameOwner() != null) return m.getTameOwner();
+        if (entity instanceof TamableAnimal t && t.getOwner() != null) return t.getOwner();
+        if (entity instanceof Mob mob && isDataTamed(mob)) {
+            UUID owner = genericOwnerUUID(entity);
+            return owner == null ? null : entity.level().getPlayerByUUID(owner);
+        }
         return null;
     }
 
     @Nullable
     public static UUID getOwnerUUIDOf(Entity entity) {
-        if (entity instanceof ModifedToBeTameable m) return m.getTameOwnerUUID();
-        if (entity instanceof TamableAnimal t) return t.getOwnerUUID();
+        if (entity instanceof ModifedToBeTameable m && m.getTameOwnerUUID() != null) return m.getTameOwnerUUID();
+        if (entity instanceof TamableAnimal t && t.getOwnerUUID() != null) return t.getOwnerUUID();
+        if (entity instanceof Mob mob && isDataTamed(mob)) {
+            return genericOwnerUUID(entity);
+        }
         return null;
     }
 
     public static void setOwnerUUIDOf(Entity entity, UUID uuid) {
         if (entity instanceof ModifedToBeTameable m) m.setTameOwnerUUID(uuid);
         if (entity instanceof TamableAnimal t) t.setOwnerUUID(uuid);
+        // Deed transfers on a data-tamed pet update the generic record; the
+        // generic layer never CREATES owner data here, so arbitrary mobs stay
+        // untouched
+        if (!(entity instanceof ModifedToBeTameable) && !(entity instanceof TamableAnimal)
+                && entity instanceof Mob mob && hasGenericOwnerData(mob)) {
+            setDataTameOwner(mob, uuid);
+        }
+    }
+
+    // =========================================================================
+    // Generic pet layer - owner/command state for datapack-tamed mobs
+    // (see DIDataRegistries.TAMING and GenericPetAI)
+    // =========================================================================
+
+    /**
+     * Whether this mob was tamed through the datapack taming registry: it
+     * carries a generic owner record in PET_DATA and the feature is enabled.
+     * Mirrors the per-species config pattern - turning data_driven_taming off
+     * makes data-tamed pets read as untamed without destroying their data.
+     * Cheap enough for per-tick gates: one attachment peek plus a key check.
+     */
+    public static boolean isDataTamed(Mob mob) {
+        return hasGenericOwnerData(mob) && DomesticationMod.CONFIG.dataDrivenTaming.get();
+    }
+
+    /**
+     * Records the owner of a data-tamed pet in the PET_DATA attachment and
+     * seeds the command to 1 ("stay") on first tame, matching the species
+     * taming paths. Only the data-taming flow and deed transfers call this.
+     */
+    public static void setDataTameOwner(Mob mob, UUID ownerUUID) {
+        CompoundTag tag = getPetTag(mob);
+        tag.putUUID(GENERIC_TAME_OWNER, ownerUUID);
+        if (!tag.contains(GENERIC_COMMAND)) {
+            tag.putInt(GENERIC_COMMAND, 1);
+        }
+        setPetTag(mob, tag);
+    }
+
+    private static boolean hasGenericOwnerData(Entity entity) {
+        if (!(entity instanceof LivingEntity living)) return false;
+        CompoundTag tag = DIAttachments.peekPetData(living);
+        return tag != null && tag.hasUUID(GENERIC_TAME_OWNER);
+    }
+
+    @Nullable
+    private static UUID genericOwnerUUID(Entity entity) {
+        if (!(entity instanceof LivingEntity living)) return null;
+        CompoundTag tag = DIAttachments.peekPetData(living);
+        return tag != null && tag.hasUUID(GENERIC_TAME_OWNER) ? tag.getUUID(GENERIC_TAME_OWNER) : null;
     }
 
     // =========================================================================
@@ -246,6 +326,13 @@ public class TameableUtils {
                 return true;
             } catch (Exception ignored) {}
         }
+        // Generic layer LAST so a real setCommand API is never shadowed
+        if (entity instanceof Mob mob && isDataTamed(mob)) {
+            CompoundTag tag = getPetTag(entity);
+            tag.putInt(GENERIC_COMMAND, command);
+            setPetTag(entity, tag);
+            return true;
+        }
         return false;
     }
 
@@ -265,6 +352,11 @@ public class TameableUtils {
                 int raw = (int) method.invoke(entity);
                 return usesAlexsMobsCommandOrder(entity) ? translateForeignCommand(raw) : raw;
             } catch (Exception ignored) {}
+        }
+        // Generic layer LAST so a real getCommand API is never shadowed
+        if (entity instanceof Mob mob && isDataTamed(mob)) {
+            CompoundTag tag = DIAttachments.peekPetData(entity);
+            return tag != null && tag.contains(GENERIC_COMMAND) ? tag.getInt(GENERIC_COMMAND) : 1;
         }
         return -1;
     }
@@ -756,6 +848,8 @@ public class TameableUtils {
             return commandable.getCommand() == 2;
         } else if (animal instanceof TamableAnimal tame) {
             return !tame.isOrderedToSit() && animal.distanceTo(owner) < 10;
+        } else if (isDataTamed(animal)) {
+            return tryGetCommand(animal) == 2;
         }
         return false;
     }

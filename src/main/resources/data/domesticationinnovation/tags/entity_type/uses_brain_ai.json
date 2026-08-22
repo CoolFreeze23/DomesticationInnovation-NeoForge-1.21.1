@@ -1,0 +1,21 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:allay",
+    "minecraft:armadillo",
+    "minecraft:axolotl",
+    "minecraft:breeze",
+    "minecraft:camel",
+    "minecraft:frog",
+    "minecraft:goat",
+    "minecraft:hoglin",
+    "minecraft:piglin",
+    "minecraft:piglin_brute",
+    "minecraft:sniffer",
+    "minecraft:tadpole",
+    "minecraft:villager",
+    "minecraft:wandering_trader",
+    "minecraft:warden",
+    "minecraft:zoglin"
+  ]
+}
