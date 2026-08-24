@@ -155,6 +155,9 @@ tameable; ships with the ender dragon, wither, warden, villagers and traders) an
 - **The Infamy Curse draws every hostile type**, not just classic monsters (configurable).
 - **In-game config screen** with proper labels and tooltips for every option, in English and
   Brazilian Portuguese.
+- **The Brazilian Portuguese translation is complete** — the inherited community translation was
+  missing fifteen enchantments, both the Command Drum and the Wayward Lantern, and several messages
+  and subtitles. All 324 strings are now translated, with a few long-standing spelling slips fixed.
 - Thirteen new config options: `collar_drops_on_death`, `sneak_bypasses_pet_interactions`,
   `collar_tag_enchantability`, `tamer_sells_books`, `lantern_request_timeout_ticks`,
   `lantern_crash_safe_respawn`, `exclusive_pet_beds`, `infamy_curse_aggros_all_hostiles`,
