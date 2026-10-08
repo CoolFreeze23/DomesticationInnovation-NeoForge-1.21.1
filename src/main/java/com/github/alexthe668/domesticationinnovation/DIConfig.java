@@ -60,6 +60,12 @@ public class DIConfig {
     public final ModConfigSpec.BooleanValue disablePetTeleportation;
     public final ModConfigSpec.IntValue petRoamingRadius;
 
+    public final ModConfigSpec.BooleanValue petCompass;
+    public final ModConfigSpec.BooleanValue compassTeleportToPet;
+    public final ModConfigSpec.BooleanValue compassRecallPet;
+    public final ModConfigSpec.BooleanValue compassCrossDimension;
+    public final ModConfigSpec.IntValue compassCooldownSeconds;
+
     // Loot
     public final ModConfigSpec.BooleanValue petCurseEnchantmentsLootOnly;
     public final ModConfigSpec.DoubleValue sinisterCarrotLootChance;
@@ -112,6 +118,14 @@ public class DIConfig {
         injuredHealthRatio = builder.comment("fraction of max health at or below which a pet counts as badly hurt").defineInRange("injured_health_ratio", 0.2D, 0.0D, 1.0D);
         disablePetTeleportation = builder.comment("true if pets keep walking toward a faraway owner instead of teleporting to them").define("disable_pet_teleportation", false);
         petRoamingRadius = builder.comment("pets in wander mode stay within this many blocks of their claimed pet bed, set to 0 to disable").defineInRange("pet_roaming_radius", 0, 0, 512);
+        builder.pop();
+
+        builder.push("pet_compass");
+        petCompass = builder.comment("true if the pet compass shows a player where all their pets are").define("enable_pet_compass", true);
+        compassTeleportToPet = builder.comment("true if the pet compass can teleport its user to one of their pets").define("compass_teleport_to_pet", true);
+        compassRecallPet = builder.comment("true if the pet compass can bring a pet to its owner, loading the pet's area for a moment if it isn't loaded").define("compass_recall_pet", true);
+        compassCrossDimension = builder.comment("true if pet compass teleports and recalls also work between dimensions").define("compass_cross_dimension", true);
+        compassCooldownSeconds = builder.comment("seconds a player has to wait between pet compass teleports or recalls, 0 for no wait").defineInRange("compass_cooldown_seconds", 0, 0, 3600);
         builder.pop();
 
         builder.push("loot");

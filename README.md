@@ -2,7 +2,7 @@
 
 A port of [Domestication Innovation](https://www.curseforge.com/minecraft/mc-mods/domestication-innovation) (originally by alex_the_668) from Forge 1.20.1 to **NeoForge 1.21.1**.
 
-This mod expands tameable mobs in Minecraft with a trinary command system (wander / stay / follow), new taming targets (Axolotl, Fox, Rabbit, Frog), pet enchantments via collar tags, and quality-of-life blocks like the Command Drum, Pet Bed, and Wayward Lantern. It also adds Animal Tamer villagers and petshop structures to villages.
+This mod expands tameable mobs in Minecraft with a trinary command system (wander / stay / follow), new taming targets (Axolotl, Fox, Rabbit, Frog), pet enchantments via collar tags, and quality-of-life blocks like the Command Drum, Pet Bed, and Wayward Lantern, plus a Pet Compass that shows where all your pets are and can bring them back to you. It also adds Animal Tamer villagers and petshop structures to villages.
 
 ## Requirements
 

@@ -10,8 +10,8 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * GameTest registration + scaffolding smoke test, mirroring the owner's
- * OreSpawn suite idioms. Registration is purely annotation-driven:
+ * GameTest registration + scaffolding smoke test, following the OreSpawn
+ * port's GameTest suite idioms. Registration is purely annotation-driven:
  * NeoForge scans mod classes for {@link GameTestHolder} (no
  * RegisterGameTestsEvent, no mods.toml entry needed) — the holder value
  * supplies both the test batch namespace and the template namespace.

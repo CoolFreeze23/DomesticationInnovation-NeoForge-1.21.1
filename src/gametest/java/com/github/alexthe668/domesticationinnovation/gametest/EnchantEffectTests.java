@@ -34,7 +34,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * ({@link TameableUtils#addEnchant} -&gt; onUpdateEnchants and the
  * CommonProxy tick / LivingDamageEvent.Pre handlers) rather than raw NBT.
  *
- * <p>Conventions (mirroring the owner's OreSpawn suite):
+ * <p>Conventions (the same as the OreSpawn port's suite):
  * <ul>
  *   <li>Every pet and target is spawned with
  *       {@link GameTestHelper#spawnWithNoFreeWill} so no AI goal moves,

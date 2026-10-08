@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.1.0-1.21.1 — 2026-10-08
+
+### Added
+
+- **Pet Compass.** Craft one from a compass, a lead and a bone. Right-click it to see all your pets:
+  where each one is, whether it's active, last seen somewhere that isn't loaded, or resting at its
+  bed after dying, with its health and how far away it is. Each pet gets two buttons. **Go to** takes
+  you to the pet, and **Recall** brings the pet to you, loading its area for a moment if it isn't
+  loaded and working across dimensions. A new Pet Compass config section can turn off the compass,
+  either button or the cross-dimension part, or add a cooldown. Pets tamed before this version show
+  up the first time they're loaded.
+- **Right-click a pet bed** with an empty hand to see whose bed it is, or which pet is resting there
+  until morning.
+
+### Fixed
+
+- **Pets now come back the morning after they die even if their bed wasn't loaded at dawn.** A pet
+  bed only checked on the first tick of each day, so if it was out of range at that moment the pet
+  waited another whole day, and kept waiting until someone happened to be nearby at dawn. Beds now
+  check every second whether a new day has started since the pet died.
+- **Respawned pets keep their exact name.** A name that looked like a text key, or had a `%` in it,
+  came back wrong after a pet bed respawn or a Wayward Lantern rebuild.
+
+### Credits
+
+The Pet Compass and the pet bed fixes are ideas from two other ports of this mod,
+[PetHome](https://github.com/yzqdev/pet_home) by yzqdev and
+[Redomesticate](https://github.com/evanbones/Redomesticate) by evanbones. The code in this release
+was written for this port.
+
+---
+
 ## 2.0.0-1.21.1 — 2026-08-22
 
 First packaged release of the NeoForge 1.21.1 port.

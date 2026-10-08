@@ -143,6 +143,9 @@ public class CommonProxy {
 
     public void clientInit() {}
 
+    /** Opens (or refreshes) the pet compass screen; only the client proxy has one. */
+    public void openPetCompass(PetCompassListPacket packet) {}
+
     public void updateVisualDataForMob(Entity entity, int[] arr) {}
 
     public void updateEntityStatus(Entity entity, byte updateKind) {}
@@ -322,6 +325,17 @@ public class CommonProxy {
         if (TameableUtils.couldBeTamed(living) && TameableUtils.hasEnchant(living, DIEnchantmentKeys.HEALTH_BOOST)) {
             TameableUtils.setSafePetHealth(living, living.getHealth());
         }
+
+        // Pet compass: keep where an unloading pet was last seen. A pet discarded from the world
+        // (bucketed, captured, or replaced by its own copy after a dimension hop) is forgotten; if it
+        // lives on, its next report brings it back. Deaths are handled in onLivingDeath.
+        if (!living.level().isClientSide && living.getServer() != null && TameableUtils.isTamed(living)) {
+            if (living.getRemovalReason() == Entity.RemovalReason.DISCARDED) {
+                PetRecords.get(living.getServer()).remove(living.getUUID());
+            } else if (living.isAlive()) {
+                PetRecords.get(living.getServer()).update(living);
+            }
+        }
     }
 
     /**
@@ -352,6 +366,7 @@ public class CommonProxy {
         }
         if (!level.isClientSide && level instanceof ServerLevel serverLevel) {
             processPendingTeleports(serverLevel);
+            PetCompassService.tick(serverLevel);
             if (serverLevel.getGameTime() % 10 == 0) {
                 tickXpTransferPets(serverLevel);
             }
@@ -546,6 +561,12 @@ public class CommonProxy {
         // broken or claimed elsewhere are noticed without a per-tick cost
         if (!living.level().isClientSide && (living.tickCount + living.getId()) % 200 == 0) {
             PetBedBlockEntity.revalidateBedLink(living);
+        }
+
+        // Tamed pets report where they are every five seconds, for the pet compass
+        if (!living.level().isClientSide && (living.tickCount + living.getId()) % 100 == 0
+                && living.getServer() != null && TameableUtils.isTamed(living)) {
+            PetRecords.get(living.getServer()).update(living);
         }
 
         // Data-tamed brain mobs get their bed-anchored roaming via
@@ -1378,6 +1399,14 @@ public class CommonProxy {
         if (bedPos != null && !queuedRespawn && !event.getEntity().level().isClientSide) {
             // No respawn coming, so the pet's death frees its bed for another pet
             PetBedBlockEntity.releaseClaim(event.getEntity().level(), bedPos, event.getEntity().getUUID());
+        }
+        if (!event.getEntity().level().isClientSide && event.getEntity().getServer() != null) {
+            PetRecords records = PetRecords.get(event.getEntity().getServer());
+            if (queuedRespawn) {
+                records.markResting(event.getEntity(), bedPos, TameableUtils.getPetBedDimension(event.getEntity()));
+            } else {
+                records.remove(event.getEntity().getUUID());
+            }
         }
         if (!queuedRespawn && DomesticationMod.CONFIG.collarDropsOnDeath.get()
                 && !event.getEntity().level().isClientSide

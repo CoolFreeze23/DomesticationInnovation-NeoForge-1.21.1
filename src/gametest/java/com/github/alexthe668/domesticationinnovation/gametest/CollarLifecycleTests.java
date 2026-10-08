@@ -184,11 +184,12 @@ public class CollarLifecycleTests {
      * and NO collar item dropped (the death handler skips the drop when a
      * respawn was queued).
      *
-     * "Next morning" gate: PetBedBlockEntity.tick only processes requests
-     * when level.dayTime() % 24000 == 1. Freezing RULE_DAYLIGHT and pinning
-     * dayTime to 240001 makes the bed hit that gate on its very next tick,
-     * independent of the advance-vs-blockentity-vs-gametest tick ordering;
-     * both are restored on success. Own batch: the pinned clock is global.
+     * "Next morning" gate: PetBedBlockEntity.tick checks its requests every
+     * second and respawns once a new day has begun since the death
+     * (isRespawnDue). Freezing RULE_DAYLIGHT and pinning dayTime to 240001,
+     * ten days on, makes the next check pass, independent of the
+     * advance-vs-blockentity-vs-gametest tick ordering; both are restored on
+     * success. Own batch: the pinned clock is global.
      */
     @GameTest(template = "platform", timeoutTicks = 300, batch = "collarLifecycleClock")
     public void bed_respawn_carries_collar_enchants(GameTestHelper helper) {

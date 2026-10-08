@@ -18,4 +18,5 @@ public class DIItemRegistry {
     public static final Supplier<Item> DEFLECTION_SHIELD = DEF_REG.register("deflection_shield", () -> new InventoryOnlyItem(new Item.Properties()));
     public static final Supplier<Item> MAGNET = DEF_REG.register("magnet", () -> new InventoryOnlyItem(new Item.Properties()));
     public static final Supplier<Item> DEED_OF_OWNERSHIP = DEF_REG.register("deed_of_ownership", DeedOfOwnershipItem::new);
+    public static final Supplier<Item> PET_COMPASS = DEF_REG.register("pet_compass", PetCompassItem::new);
 }

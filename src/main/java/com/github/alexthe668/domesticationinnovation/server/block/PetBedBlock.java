@@ -7,7 +7,10 @@ import com.github.alexthe668.domesticationinnovation.server.misc.DITagRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -69,6 +72,21 @@ public class PetBedBlock extends BaseEntityBlock {
            }
         }
         super.entityInside(state, level, pos, entity);
+    }
+
+    /**
+     * Right-clicking a bed with an empty hand says whose it is. With anything in hand the click
+     * passes through, so blocks can still be placed against the bed.
+     */
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+        if (!player.getMainHandItem().isEmpty()) {
+            return InteractionResult.PASS;
+        }
+        if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof PetBedBlockEntity bed) {
+            player.displayClientMessage(bed.describeOccupant(serverLevel), true);
+        }
+        return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
     private static boolean seeksBed(LivingEntity entity) {

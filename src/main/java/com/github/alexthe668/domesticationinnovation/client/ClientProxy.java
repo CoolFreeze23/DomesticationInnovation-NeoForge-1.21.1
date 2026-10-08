@@ -15,6 +15,8 @@ import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.ChatFormatting;
+import com.github.alexthe668.domesticationinnovation.client.gui.PetCompassScreen;
+import com.github.alexthe668.domesticationinnovation.server.misc.PetCompassListPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -353,6 +355,16 @@ public class ClientProxy extends CommonProxy {
             if (sound != null) {
                 Minecraft.getInstance().getSoundManager().stop(sound);
             }
+        }
+    }
+
+    @Override
+    public void openPetCompass(PetCompassListPacket packet) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof PetCompassScreen screen) {
+            screen.setData(packet);
+        } else if (!packet.refreshOnly()) {
+            minecraft.setScreen(new PetCompassScreen(packet));
         }
     }
 }

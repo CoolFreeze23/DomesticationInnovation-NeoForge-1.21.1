@@ -4,6 +4,7 @@ import com.github.alexthe668.domesticationinnovation.server.entity.ModifedToBeTa
 import com.github.alexthe668.domesticationinnovation.DomesticationMod;
 import com.github.alexthe668.domesticationinnovation.server.entity.TameableUtils;
 import com.github.alexthe668.domesticationinnovation.server.misc.DIWorldData;
+import com.github.alexthe668.domesticationinnovation.server.misc.PetRecords;
 import com.github.alexthe668.domesticationinnovation.server.misc.RespawnRequest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -35,16 +36,19 @@ public class PetBedBlockEntity extends BlockEntity {
     }
 
     public static void tick(Level level, BlockPos pos, BlockState state, PetBedBlockEntity blockEntity) {
-        long time = level.dayTime() % 24000L;
-        if(time == 1){
+        if (!level.isClientSide && level.getGameTime() % 20L == 0L) {
             DIWorldData data = DIWorldData.get(level);
-            if(data != null){
-               List<RespawnRequest> requestList = data.getRespawnRequestsFor(level, pos);
-               for(RespawnRequest request : requestList){
-                    if(addAndRemoveEntity(level, pos, state.getValue(PetBedBlock.FACING), request)){
-                        data.removeRespawnRequest(request);
+            if (data != null) {
+                List<RespawnRequest> requestList = data.getRespawnRequestsFor(level, pos);
+                if (!requestList.isEmpty()) {
+                    long now = level.dayTime();
+                    for (RespawnRequest request : requestList) {
+                        if (isRespawnDue(now, request.getTimestamp())
+                                && addAndRemoveEntity(level, pos, state.getValue(PetBedBlock.FACING), request)) {
+                            data.removeRespawnRequest(request);
+                        }
                     }
-               }
+                }
             }
         }
         if (blockEntity.claimedPetUUID != null && level.getGameTime() % 40L == 0L && level instanceof ServerLevel serverLevel) {
@@ -58,6 +62,48 @@ public class PetBedBlockEntity extends BlockEntity {
                 }
             }
         }
+    }
+
+    /**
+     * A pet comes back the morning after it died, i.e. once a new day has begun since its death.
+     * Beds check this every second rather than only on the first tick of the day, so a bed whose
+     * chunk wasn't loaded at dawn no longer costs its pet another whole day. A clock turned back past
+     * the death (/time set) counts too, or the pet would wait for a morning that never comes.
+     */
+    public static boolean isRespawnDue(long dayTime, long diedAt) {
+        return dayTime / 24000L > diedAt / 24000L || dayTime < diedAt;
+    }
+
+    /**
+     * What a player sees when they right-click this bed: the pet waiting to respawn here, the pet
+     * that claimed it, or that it's free. The claimant is looked up in every dimension.
+     */
+    public Component describeOccupant(ServerLevel level) {
+        DIWorldData data = DIWorldData.get(level);
+        if (data != null) {
+            List<RespawnRequest> waiting = data.getRespawnRequestsFor(level, this.getBlockPos());
+            if (!waiting.isEmpty()) {
+                RespawnRequest request = waiting.get(0);
+                Component name;
+                if (!request.getNametag().isEmpty()) {
+                    name = Component.literal(request.getNametag());
+                } else {
+                    EntityType<?> type = request.getEntityType();
+                    name = type != null ? type.getDescription() : Component.literal(request.getEntityTypeLoc());
+                }
+                return Component.translatable("message.domesticationinnovation.pet_bed_waiting", name);
+            }
+        }
+        if (this.claimedPetUUID != null) {
+            for (ServerLevel candidate : level.getServer().getAllLevels()) {
+                Entity pet = candidate.getEntity(this.claimedPetUUID);
+                if (pet != null) {
+                    return Component.translatable("message.domesticationinnovation.pet_bed_owned", pet.getDisplayName());
+                }
+            }
+            return Component.translatable("message.domesticationinnovation.pet_bed_claimed");
+        }
+        return Component.translatable("message.domesticationinnovation.pet_bed_free");
     }
 
     @Nullable
@@ -182,8 +228,10 @@ public class PetBedBlockEntity extends BlockEntity {
                 DIAttachments.readPetDataFrom(living, request.getEntityData());
                 living.setPos(Vec3.upFromBottomCenterOf(pos, 0.8F));
                 living.setHealth(living.getMaxHealth());
-                if(!request.getNametag().isEmpty()){
-                    living.setCustomName(Component.translatable(request.getNametag()));
+                // a pet's name is plain text: as a translatable it would be looked up as a lang key
+                // and break on a '%'
+                if (living.getCustomName() == null && !request.getNametag().isEmpty()) {
+                    living.setCustomName(Component.literal(request.getNametag()));
                 }
                 switch (dir){
                     case NORTH:
@@ -207,6 +255,10 @@ public class PetBedBlockEntity extends BlockEntity {
                 // the respawned pet is a fresh entity - point the bed's claim at its new UUID
                 if (level.getBlockEntity(pos) instanceof PetBedBlockEntity bed) {
                     bed.setClaimedPet(living.getUUID());
+                }
+                // and the pet compass, which listed it as resting here under its old UUID
+                if (level.getServer() != null) {
+                    PetRecords.get(level.getServer()).onRespawnedAtBed(level, pos, living);
                 }
                 Entity owner = TameableUtils.getOwnerOf(entity);
                 if(owner instanceof Player){

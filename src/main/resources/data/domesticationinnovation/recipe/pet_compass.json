@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "minecraft:compass"
+    },
+    {
+      "item": "minecraft:lead"
+    },
+    {
+      "item": "minecraft:bone"
+    }
+  ],
+  "result": {
+    "id": "domesticationinnovation:pet_compass",
+    "count": 1
+  }
+}

@@ -204,8 +204,9 @@ public class WaywardLanternBlockEntity extends BlockEntity {
         DIAttachments.readPetDataFrom(living, request.getEntitySnapshot());
         // the original UUID is kept so bed claims and any future requests still point at this pet
         living.setUUID(request.getPetUUID());
-        if (!request.getNametag().isEmpty()) {
-            living.setCustomName(Component.translatable(request.getNametag()));
+        // plain text, like the pet bed respawn: a translatable would treat the name as a lang key
+        if (living.getCustomName() == null && !request.getNametag().isEmpty()) {
+            living.setCustomName(Component.literal(request.getNametag()));
         }
         BlockPos putAt = getPlaceFor(living, lanternPos, serverLevel.random);
         living.moveTo(putAt.getX() + 0.5D, putAt.getY(), putAt.getZ() + 0.5D, living.getYRot(), living.getXRot());

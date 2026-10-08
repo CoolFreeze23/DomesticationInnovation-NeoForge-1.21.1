@@ -21,11 +21,21 @@ public class DINetworkRegistry {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar(DomesticationMod.MODID).versioned("1.0");
+        PayloadRegistrar registrar = event.registrar(DomesticationMod.MODID).versioned("1.1");
         registrar.playToClient(
                 DIPetDataSyncPacket.TYPE,
                 DIPetDataSyncPacket.STREAM_CODEC,
                 DIPetDataSyncPacket::handleClient
+        );
+        registrar.playToClient(
+                PetCompassListPacket.TYPE,
+                PetCompassListPacket.STREAM_CODEC,
+                PetCompassListPacket::handleClient
+        );
+        registrar.playToServer(
+                PetCompassActionPacket.TYPE,
+                PetCompassActionPacket.STREAM_CODEC,
+                PetCompassActionPacket::handleServer
         );
     }
 
