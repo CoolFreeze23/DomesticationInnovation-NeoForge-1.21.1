@@ -33,4 +33,6 @@ The built jar will be in `build/libs/`.
 
 ## License
 
+This port is licensed under the GNU General Public License v3.0 (GPL-3.0-only); see [LICENSE](LICENSE). The original Domestication Innovation is published under the GNU LGPL in its source and under the GPL-3.0 on its Modrinth page, and the GPL-3.0 meets both.
+
 This is an unofficial port. All original credit goes to [alex_the_668](https://github.com/alex-the-668) for the original Domestication Innovation mod.
